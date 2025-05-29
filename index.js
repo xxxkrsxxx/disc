@@ -24,22 +24,22 @@ const {
 } = require('discord.js');
 
 const fs = require('fs');
-const path = require('path'); // Dodano moduł path
+const path = require('path'); 
 const axios = require('axios');
-const cheerio = require('cheerio');
+// const cheerio = require('cheerio'); // Usunięte, bo DOC_URL nie jest już używane
 const consola = require('consola');
 const schedule = require('node-schedule');
-const crypto = require('crypto');
+// const crypto = require('crypto'); // Usunięte, bo DOC_URL nie jest już używane
 
 // --- ENV VALIDATION ---
 const {
     DISCORD_TOKEN,
     CLIENT_ID,
     OWNER_ID,
-    CHANNEL_ID, 
-    ROLE_ID,    
-    DOC_URL,
-    GUILD_ID, // Kluczowe dla działania na jednym serwerze
+    CHANNEL_ID,  // Kanał dla ankiet
+    ROLE_ID,     // Rola pingowana przy ankietach
+    // DOC_URL, // Usunięte
+    GUILD_ID,    // Kluczowe dla działania na jednym serwerze
     LEADER_ROLE_ID, 
     PANEL_CHANNEL_ID, 
     QUEUE_CHANNEL_ID, 
@@ -48,14 +48,17 @@ const {
     VOICE_CREATOR_CHANNEL_ID, 
     TEMP_CHANNEL_CATEGORY_ID, 
     MVP_ROLE_ID,
-    TEMP_VC_CONTROL_PANEL_CATEGORY_ID 
+    TEMP_VC_CONTROL_PANEL_CATEGORY_ID,
+    MONITORED_VC_ID, // NOWA ZMIENNA
+    LOG_TEXT_CHANNEL_ID // NOWA ZMIENNA
 } = process.env;
 
-if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !CHANNEL_ID || !ROLE_ID || !DOC_URL || !GUILD_ID || !LEADER_ROLE_ID || !PANEL_CHANNEL_ID || !QUEUE_CHANNEL_ID || !GAME_LOBBY_VOICE_CHANNEL_ID || !WAITING_ROOM_VOICE_CHANNEL_ID || !VOICE_CREATOR_CHANNEL_ID || !TEMP_CHANNEL_CATEGORY_ID || !TEMP_VC_CONTROL_PANEL_CATEGORY_ID ) {
-    consola.warn('⚠️ One or more ENV variables might be missing. Ensure all required ones are set.');
+if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !CHANNEL_ID || !ROLE_ID || /*!DOC_URL ||*/ !GUILD_ID || !LEADER_ROLE_ID || !PANEL_CHANNEL_ID || !QUEUE_CHANNEL_ID || !GAME_LOBBY_VOICE_CHANNEL_ID || !WAITING_ROOM_VOICE_CHANNEL_ID || !VOICE_CREATOR_CHANNEL_ID || !TEMP_CHANNEL_CATEGORY_ID || !TEMP_VC_CONTROL_PANEL_CATEGORY_ID ) {
+    consola.warn('⚠️ One or more critical ENV variables might be missing. Ensure all required ones are set.');
     if (!MVP_ROLE_ID) consola.warn("MVP_ROLE_ID is missing, MVP award feature will be disabled.");
     if (!VOICE_CREATOR_CHANNEL_ID || !TEMP_CHANNEL_CATEGORY_ID) consola.warn("VOICE_CREATOR_CHANNEL_ID or TEMP_CHANNEL_CATEGORY_ID are missing, temporary voice channel creation will be disabled.");
     if (!TEMP_VC_CONTROL_PANEL_CATEGORY_ID) consola.warn("TEMP_VC_CONTROL_PANEL_CATEGORY_ID is missing, temporary voice channel control panel creation in a channel will be disabled.");
+    if (!MONITORED_VC_ID || !LOG_TEXT_CHANNEL_ID) consola.warn("MONITORED_VC_ID or LOG_TEXT_CHANNEL_ID are missing, voice join logging will be disabled.");
     if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID) {
         consola.error('❌ Critical ENV variables (TOKEN, CLIENT_ID, OWNER_ID) are missing!');
         process.exit(1);
@@ -63,26 +66,25 @@ if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !CHANNEL_ID || !ROLE_ID || !DOC
 }
 
 // --- DATA DIRECTORY SETUP ---
-// Użyj ścieżki montowania dysku z Render.com, jeśli jest dostępna, w przeciwnym razie użyj lokalnego podfolderu.
 const DATA_DIR = process.env.RENDER_DISK_MOUNT_PATH || path.join(__dirname, 'bot_data'); 
 
-// Upewnij się, że katalog danych istnieje (ważne przy pierwszym uruchomieniu na Render lub lokalnie)
 if (!fs.existsSync(DATA_DIR)){
     fs.mkdirSync(DATA_DIR, { recursive: true });
     consola.info(`Created data directory at: ${DATA_DIR}`);
 }
 
 // --- FILE HELPERS (Zaktualizowane ścieżki) ---
-const ANKIETA_IMG_URL = 'https://i.imgur.com/kbcQMzE.jpeg';
-const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png';
+const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; // Zaktualizowany URL
+const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; // Miniatura dla rankingu
+const MAIN_RANKING_IMAGE_URL = 'https://i.imgur.com/YqYm9oR.jpeg'; // Główny obrazek rankingu
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
-const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
+const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt'); // Nadal używane, jeśli panel jest statyczny
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
 const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json'); 
 
-function loadJSON(filePath, defaultValue = {}) { // Zmieniono 'path' na 'filePath' dla jasności
+function loadJSON(filePath, defaultValue = {}) {
     if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
         return defaultValue;
@@ -100,7 +102,7 @@ function loadJSON(filePath, defaultValue = {}) { // Zmieniono 'path' na 'filePat
         return defaultValue;
     }
 }
-function saveJSON(filePath, data) { // Zmieniono 'path' na 'filePath'
+function saveJSON(filePath, data) {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
@@ -154,9 +156,9 @@ function getWynikRanking(includeMvpMention = false, mvpUserId = null) {
 
 
 function recordPollVoteActivity(userId) { 
-    const pollActivity = loadJSON(RANK_FILE, {}); // Używa globalnej stałej RANK_FILE
+    const pollActivity = loadJSON(RANK_FILE, {});
     pollActivity[userId] = (pollActivity[userId] || 0) + 1;
-    saveJSON(RANK_FILE, pollActivity); // Używa globalnej stałej RANK_FILE
+    saveJSON(RANK_FILE, pollActivity);
     consola.info(`[Poll Activity] Recorded vote for ${userId}. Total votes for this cycle: ${pollActivity[userId]}`);
 }
 function addPollPoints(userId) { 
@@ -165,78 +167,70 @@ function addPollPoints(userId) {
 }
 
 function resetPollActivityData() { 
-    saveJSON(RANK_FILE, {}); // Używa globalnej stałej RANK_FILE
+    saveJSON(RANK_FILE, {});
     consola.info('📉 Dane aktywności w ankietach (rank.json) do śledzenia pierwszego głosu zresetowane.');
 }
 
 
 function savePanelMessageId(id) {
-    fs.writeFileSync(PANEL_ID_FILE, id, 'utf8'); // Używa globalnej stałej PANEL_ID_FILE
+    fs.writeFileSync(PANEL_ID_FILE, id, 'utf8');
 }
 function loadPanelMessageId() {
-    if (fs.existsSync(PANEL_ID_FILE)) { // Używa globalnej stałej PANEL_ID_FILE
+    if (fs.existsSync(PANEL_ID_FILE)) {
         return fs.readFileSync(PANEL_ID_FILE, 'utf8');
     }
     return '';
 }
 
 function saveQueueMessageId(id) {
-    fs.writeFileSync(QUEUE_MESSAGE_ID_FILE, id, 'utf8'); // Używa globalnej stałej QUEUE_MESSAGE_ID_FILE
+    fs.writeFileSync(QUEUE_MESSAGE_ID_FILE, id, 'utf8');
 }
 function loadQueueMessageId() {
-    if (fs.existsSync(QUEUE_MESSAGE_ID_FILE)) { // Używa globalnej stałej QUEUE_MESSAGE_ID_FILE
+    if (fs.existsSync(QUEUE_MESSAGE_ID_FILE)) {
         return fs.readFileSync(QUEUE_MESSAGE_ID_FILE, 'utf8');
     }
     return '';
 }
 
-async function getRoleDescription(roleName) {
-    try {
-        const res = await axios.get(DOC_URL);
-        const $ = cheerio.load(res.data);
-        let collecting = false, text = '';
-        $('p').each((_, p) => {
-            const line = $(p).text().trim();
-            if (!collecting && line.toLowerCase() === roleName.toLowerCase()) {
-                collecting = true;
-                text += `**${line}**\n`;
-                return;
-            }
-            if (collecting && /^[A-Z][\w\s]+$/.test(line) && !line.toLowerCase().includes(roleName.toLowerCase())) {
-                collecting = false;
-                return;
-            }
-            if (collecting) text += line + '\n';
-        });
-        return text.trim() || `❌ Nie znaleziono opisu roli "${roleName}"`;
-    } catch (e) {
-        consola.error('Error fetching doc:', e);
-        return '❌ Error fetching document.';
-    }
-}
+// Usunięto getRoleDescription, checkForDocUpdate
 
-let lastDocHash = '';
+// NOWE LISTY GIF-ÓW
+const WINNING_POLL_GIFS = [
+    'https://media.tenor.com/npVhw1RtprpAAAAC/among-us-orange.gif',
+    'https://media.tenor.com/ir9j4owKpVpAAAAC/among-us-dance.gif',
+    'https://media.tenor.com/dE7W4HeG1klAAAAC/among-us-yellow.gif',
+    'https://media.tenor.com/xR6AbprFsJIAAAAC/among-us-red.gif',
+    'https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif',
+    'https://media.tenor.com/40kdkGTG0oAAAAAC/among-us.gif',
+    'https://media.tenor.com/uVP0V5ALGIAAAAAC/among-us.gif',
+    'https://media.tenor.com/T1P50s57x4QAAAAC/among-us.gif',
+    'https://media.tenor.com/dhyB3hJ6EwdAAAAC/among-us-orange.gif',
+    'https://media.tenor.com/Q2Ri8x13aYMAAAAC/among-us.gif',
+    'https://media.tenor.com/beNJu.gif' // Czerwony tańczy inaczej
+];
+
+const TIE_POLL_GIFS = [
+    'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif',
+    'https://media.tenor.com/vrFOtiD1pHQAAAAC/among-us-spin.gif',
+    'https://media.tenor.com/Hz3ckWksWmAAAAAC/among-us-among-us-vent.gif' 
+];
+
+const NO_VOTES_GIF = 'https://c.tenor.com/x65m9H2F0wAAAAAC/among-us.gif'; // Shhh
+const DEFAULT_POLL_GIF = 'https://c.tenor.com/Z3z0vYATH_IAAAAC/among-us-task.gif'; // Generic fallback
+
 
 async function registerCommands() {
-    const res = await axios.get(DOC_URL);
-    const $ = cheerio.load(res.data);
-    const names = new Set();
-    $('p').each((_, p) => {
-        const w = $(p).text().trim();
-        if (/^[a-zA-Z0-9][a-zA-Z0-9\s]{0,30}[a-zA-Z0-9]$/.test(w) && w.length < 32 && !w.includes('.') && !w.includes(',') && !w.includes(':')) {
-            if ($(p).next('p').text().trim() !== "" && $(p).prev('p').text().trim() === "") { 
-                names.add(w.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')); 
-            }
-        }
-    });
-    ['reload', 'ranking', 'ankieta'].forEach(n => names.add(n));
+    const cmds = []; // Komendy będą teraz tylko statyczne
 
-    const cmds = Array.from(names).filter(name => name.length > 0).map(n => 
-        new SlashCommandBuilder()
-            .setName(n)
-            .setDescription(names.has(n) && n !== 'reload' && n !== 'ranking' && n !== 'ankieta' ? `Opis roli: ${n.replace(/_/g, ' ')}` : `Komenda ${n}`)
-            .toJSON()
+    // Komendy, które były wcześniej zależne od DOC_URL, teraz muszą być dodane statycznie, jeśli są potrzebne,
+    // lub ich funkcjonalność została usunięta.
+    // ['reload', 'ranking', 'ankieta'].forEach(n => names.add(n)); // Ta część jest już niepotrzebna
+
+    cmds.push(
+        new SlashCommandBuilder().setName('reload').setDescription('Przeładuj konfigurację komend (tylko Owner).').toJSON()
     );
+    // Komenda /ranking teraz będzie aliasem do /wynikirank lub usunięta. Na razie zostawiam jako /wynikirank.
+    // Komenda /ankieta jako taka nie ma sensu, bo ankiety są automatyczne lub testowe.
 
     cmds.push(
         new SlashCommandBuilder()
@@ -333,11 +327,10 @@ async function registerCommands() {
             .toJSON()
     );
 
-
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     try {
         await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), // Rejestracja dla konkretnego serwera
+            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), // Nadal rejestrujemy dla konkretnego GUILD_ID, bo bot działa na jednym serwerze
             { body: cmds }
         );
         consola.success(`✅ Registered ${cmds.length} commands in guild ${GUILD_ID}`);
@@ -346,47 +339,21 @@ async function registerCommands() {
     }
 }
 
-
-async function checkForDocUpdate() {
-    try {
-        const res = await axios.get(DOC_URL);
-        const hash = crypto.createHash('sha256').update(res.data).digest('hex');
-        if (hash !== lastDocHash) {
-            consola.info('🆕 Doc changed, re-registering commands');
-            lastDocHash = hash;
-            await registerCommands();
-        }
-    } catch (e) {
-        consola.error('Error checking doc update:', e);
-    }
-}
-
-const VOTE_GIFS = { 
-    '19:00': 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExN2ZqNjdtOG9vdGJnY2d6OWkzYWYzeWRwdzRtMXZsZ3ZudGdmOWVqaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6WFScxN6fi95z3YVQD/giphy.gif',
-    '20:00': 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDJ3eDQ2ZGg0eThxdGU2MXFpYXppcGZjYTI0ZDhxNTg2cWQ2YWEzbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/F4v3txFTUplfKQvbGT/giphy.gif',
-    '21:00': 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExMDd5MnpxNWp6Y3ExdGZmdGZ4ZjVwcnlraHhsdmNpdjJwaTZrOXlwcyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/X9izlczKyCpmCSZu0l/giphy.gif',
-    '22:00': 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbG53cnFqN20waDRuZXJreGhvdDZxdGEweTJmcTBoZHFldTM5YnkxcyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/G5MDBwmdTrVMpuRJix/giphy.gif',
-    'tie': 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExZW9nOWxsaWYwdnFsZDhzd205MDU1aHY5Y3h3a3hjbnB1cGhhMzVxbyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/lbwhz6vtJ7XHQd5ahp/giphy.gif',
-    'default': ANKIETA_IMG_URL, 
-    'results_generic': 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif'
-};
+// Usunięto checkForDocUpdate
 
 // --- PANEL EMBED & ROW ---
 function getPanelEmbed() {
     return new EmbedBuilder()
         .setTitle('Panel rankingów Among Us')
-        .setDescription('Kliknij przycisk poniżej, aby zobaczyć ranking!'); 
+        .setDescription('Ranking dostępny jest poprzez komendę /wynikirank'); // Zmieniono opis, bo nie ma przycisku
 }
 function getPanelRow() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('show_wynikirank')
-            .setLabel('Ranking Punktów 🏆')
-            .setStyle(ButtonStyle.Primary)
-    );
+    // Usunięto przycisk, więc panel nie ma komponentów
+    return null; // Lub new ActionRowBuilder() jeśli chcesz pusty, ale lepiej null i nie dodawać do send/edit
 }
 
 // --- ANKIETA ---
+const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n🔔Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n     Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
 
 function determineWinnerDescriptionForMainEmbed(votesCollection) {
     const counts = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
@@ -499,14 +466,25 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         }
 
         const summaryEmbed = new EmbedBuilder().setColor(0x2ECC71);
-        let gifUrl = VOTE_GIFS['default'];
+        let gifUrl;
         let summaryTitle = '🎉 Głosowanie Zakończone! 🎉';
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
             summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
-            gifUrl = VOTE_GIFS[winnerTime] || VOTE_GIFS['default'];
-            summaryDescription = `Wybrano godzinę **${winnerTime}**! Do zobaczenia w grze!`;
+            if (WINNING_POLL_GIFS.length > 0) {
+                gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
+            } else {
+                gifUrl = DEFAULT_POLL_GIF;
+            }
+
+            if (winnerTime === '19:00') {
+                summaryDescription = "🗳️ Godzina 19:00 wybrana przez Psychopatów!\n\n🧠  Wszyscy wiemy, że to jedyna pora żeby zdążyć zanim zacznie się... coś więcej.\n\n 🕖 Przyjdź punktualnie. Zaufanie zbudujemy tylko raz.";
+            } else if (['20:00', '21:00', '22:00'].includes(winnerTime)) {
+                summaryDescription = `🗳️ Większość z was wyjątkowo zagłosowała na ${winnerTime}.${susMessagePart}`;
+            } else { 
+                summaryDescription = `Wybrano godzinę **${winnerTime}**! Do zobaczenia w grze!`;
+            }
             summaryEmbed.setDescription(summaryDescription);
 
             if (votersByTime[winnerTime] && votersByTime[winnerTime].length > 0) {
@@ -516,7 +494,11 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             }
         } else if (winnerTime === 'tie') {
             summaryTitle = `🤝 Mamy Remis! 🤝`;
-            gifUrl = VOTE_GIFS['tie'] || VOTE_GIFS['default'];
+            if (TIE_POLL_GIFS.length > 0) {
+                gifUrl = TIE_POLL_GIFS[Math.floor(Math.random() * TIE_POLL_GIFS.length)];
+            } else {
+                gifUrl = DEFAULT_POLL_GIF;
+            }
             summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
             summaryEmbed.setDescription(summaryDescription);
 
@@ -534,21 +516,15 @@ async function endVoting(message, votesCollection, forceEnd = false) {
 
         } else {
             summaryTitle = '😥 Nikt nie zagłosował... 😥';
+            gifUrl = NO_VOTES_GIF || DEFAULT_POLL_GIF;
             summaryDescription = 'Może następnym razem?';
             summaryEmbed.setDescription(summaryDescription);
-            gifUrl = VOTE_GIFS['default']; 
         }
 
         summaryEmbed.setTitle(summaryTitle);
-
-        if (gifUrl && gifUrl !== ANKIETA_IMG_URL) {
+        if (gifUrl) {
             summaryEmbed.setImage(gifUrl);
-        } else if (gifUrl === ANKIETA_IMG_URL && (winnerTime || winnerTime === 'tie')) {
-             summaryEmbed.setImage(VOTE_GIFS['results_generic']); 
-        } else if (!winnerTime && gifUrl === ANKIETA_IMG_URL) {
-            summaryEmbed.setImage(VOTE_GIFS['results_generic']); 
         }
-
 
         await message.channel.send({ embeds: [summaryEmbed] });
         consola.info(`[Voting Ended] Results announced. Winner: ${winnerTime || 'No votes / Tie'}`);
@@ -572,7 +548,8 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-const temporaryVoiceChannels = new Map(); 
+// const temporaryVoiceChannels = new Map(); // Poprawka: Już zadeklarowane globalnie na początku
+
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -702,11 +679,18 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'), 
         new ButtonBuilder().setCustomId(`tempvc_reject_select_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Danger).setEmoji('🚫'), 
-        new ButtonBuilder().setCustomId(`tempvc_kick_select_${vcId}`).setLabel('Wyrzuć').setStyle(ButtonStyle.Danger).setEmoji('👟'), 
-        new ButtonBuilder().setCustomId(`tempvc_delete_${vcId}`).setLabel('Usuń Kanał').setStyle(ButtonStyle.Danger).setEmoji('🗑️')
+        new ButtonBuilder().setCustomId(`tempvc_kick_select_${vcId}`).setLabel('Wyrzuć').setStyle(ButtonStyle.Danger).setEmoji('👟')
+        // Usunięto przycisk Usuń Kanał
+        // new ButtonBuilder().setCustomId(`tempvc_delete_${vcId}`).setLabel('Usuń Kanał').setStyle(ButtonStyle.Danger).setEmoji('🗑️')
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    // Jeśli row2 jest pusty po usunięciu przycisku, nie dodawaj go
+    const components = [row1];
+    if (row2.components.length > 0) {
+        components.push(row2);
+    }
+
+    return { embeds: [embed], components: components };
 }
 
 
@@ -714,7 +698,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-// const temporaryVoiceChannels = new Map(); // Poprawka: Ta linia była zbędna, deklaracja jest globalna
+const temporaryVoiceChannels = new Map();
 
 
 async function manualStartPoll(interaction) {
@@ -735,10 +719,10 @@ async function manualStartPoll(interaction) {
         const initialPollEmbeds = buildPollEmbeds(votes);
 
         const pollRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Danger), // Zmieniony styl
             new ButtonBuilder().setCustomId('vote_20').setEmoji('<:catJAM:1369714552916148224>').setLabel('Będę! (20:00)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('vote_21').setEmoji('<:VibingRabbit:1369714461568663784>').setLabel('Będę, ale później (21:00)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Secondary), // Zmieniony styl
             new ButtonBuilder().setCustomId('poll_show_voters').setEmoji('👀').setLabel('Pokaż Głosujących').setStyle(ButtonStyle.Secondary)
         );
 
@@ -770,14 +754,9 @@ async function manualStartPoll(interaction) {
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
-    try {
-        const doc = (await axios.get(DOC_URL)).data;
-        lastDocHash = crypto.createHash('sha256').update(doc).digest('hex');
-    } catch (e) {
-        consola.error("Failed to fetch initial document for hashing:", e.message);
-    }
+    // Usunięto logikę związaną z DOC_URL (lastDocHash, checkForDocUpdate)
     await registerCommands();
-    setInterval(checkForDocUpdate, 60 * 60 * 1000); 
+    // Usunięto setInterval(checkForDocUpdate, ...)
 
     const panelCh = await client.channels.fetch(PANEL_CHANNEL_ID).catch(e => {
         consola.error(`Failed to fetch PANEL_CHANNEL_ID ${PANEL_CHANNEL_ID}: ${e.message}`);
@@ -789,15 +768,23 @@ client.once('ready', async () => {
         if (panelMessageId) {
             try { panelMsg = await panelCh.messages.fetch(panelMessageId); } catch { consola.warn("Nie udało się załadować panelMsg, tworzenie nowego."); }
         }
+        
+        const panelContent = { embeds: [getPanelEmbed()] };
+        const panelComponents = getPanelRow(); // Może zwrócić null
+        if (panelComponents && panelComponents.components.length > 0) { // Tylko dodaj komponenty, jeśli istnieją
+            panelContent.components = [panelComponents];
+        }
+
+
         if (!panelMsg) {
             try {
-                const sent = await panelCh.send({ embeds: [getPanelEmbed()], components: [getPanelRow()] }); 
+                const sent = await panelCh.send(panelContent); 
                 savePanelMessageId(sent.id);
                 consola.info(`Panel created (ID: ${sent.id})`);
             } catch (e) { consola.error("Failed to create new panel message:", e.message); }
         } else {
             try {
-                await panelMsg.edit({ embeds: [getPanelEmbed()], components: [getPanelRow()] }); 
+                await panelMsg.edit(panelContent); 
                 consola.info(`Panel refreshed (ID: ${panelMsg.id})`);
             } catch (e) { consola.error("Failed to refresh panel message:", e.message); }
         }
@@ -859,10 +846,10 @@ client.once('ready', async () => {
             consola.info('Lokalna kolekcja głosów (votes) wyczyszczona przed nową ankietą.');
             const initialPollEmbeds = buildPollEmbeds(votes); 
             const pollRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Danger), // Zmieniony styl
                 new ButtonBuilder().setCustomId('vote_20').setEmoji('<:catJAM:1369714552916148224>').setLabel('Będę! (20:00)').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('vote_21').setEmoji('<:VibingRabbit:1369714461568663784>').setLabel('Będę, ale później (21:00)').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Secondary), // Zmieniony styl
                 new ButtonBuilder().setCustomId('poll_show_voters').setEmoji('👀').setLabel('Pokaż Głosujących').setStyle(ButtonStyle.Secondary)
             );
             let contentMessage = '';
@@ -968,10 +955,11 @@ client.once('ready', async () => {
 
 
                 const embed = new EmbedBuilder()
-                    .setTitle('MVP AMONG TYGODNIA') 
+                    .setTitle('🔪MVP AMONG TYGODNIA🔪') // Zmieniony tytuł
                     .setDescription(rankingDescription + mvpAnnouncement) 
                     .setColor(0xDAA520) 
                     .setThumbnail(RANKING_IMG_URL) 
+                    .setImage(MAIN_RANKING_IMAGE_URL) // Dodana główna grafika
                     .setFooter({ text: "Gratulacje!!" }); 
                 await targetChannel.send({ embeds: [embed] });
             } else {
@@ -985,27 +973,10 @@ client.on('interactionCreate', async i => {
     try {
         if (i.isButton()) {
             const panelMsgId = loadPanelMessageId();
-            if (i.message.id === panelMsgId) {
-                if (i.customId === 'show_wynikirank') {
-                    const wr = loadWynikRank();
-                    const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
-                    let currentMvpId = null;
-                    if (MVP_ROLE_ID && i.guild) { 
-                        const mvpRole = await i.guild.roles.fetch(MVP_ROLE_ID).catch(() => null);
-                        if (mvpRole) {
-                            const mvpMember = i.guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
-                            if (mvpMember) currentMvpId = mvpMember.id;
-                        }
-                    }
-
-                    const embed = new EmbedBuilder()
-                        .setTitle('Admin Table Stats') 
-                        .setColor(0xDAA520)
-                        .setThumbnail(RANKING_IMG_URL)
-                        .setDescription(getWynikRanking(true, currentMvpId)); 
-                    return i.update({ embeds: [embed], components: [getPanelRow()] }); 
-                }
-            }
+            // Usunięto obsługę przycisku z panelu, bo przycisk został usunięty
+            // if (i.message.id === panelMsgId) {
+            //     if (i.customId === 'show_wynikirank') { ... }
+            // }
         }
 
         if (i.isButton() && i.customId.startsWith('vote_')) {
@@ -1315,7 +1286,8 @@ client.on('interactionCreate', async i => {
                 const row = new ActionRowBuilder().addComponents(userSelect);
                 await i.reply({ content: 'Wybierz użytkownika do wyrzucenia z kanału:', components: [row], ephemeral: true });
                 return;
-            } else if (action === 'delete') {
+            } else if (action === 'delete') { // Usunięto przycisk, więc ta gałąź nie powinna być osiągalna przez przyciski panelu
+                 // Ale zostawiam na wypadek przyszłych komend
                 const confirmRow = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId(`tempvc_delete_confirm_${vcChannelId}`).setLabel('Tak, usuń').setStyle(ButtonStyle.Danger),
                     new ButtonBuilder().setCustomId(`tempvc_delete_cancel_${vcChannelId}`).setLabel('Anuluj').setStyle(ButtonStyle.Secondary)
@@ -1506,6 +1478,7 @@ client.on('interactionCreate', async i => {
                 .setTitle('Admin Table Stats') 
                 .setColor(0xDAA520)
                 .setThumbnail(RANKING_IMG_URL)
+                .setImage(MAIN_RANKING_IMAGE_URL) // Dodana główna grafika
                 .setDescription(getWynikRanking(true, currentMvpId)); 
             return i.reply({ embeds: [embed], ephemeral: true });
         }
@@ -1696,17 +1669,16 @@ client.on('interactionCreate', async i => {
             return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
         }
 
-
-        const roleNameForDesc = cmd.replace(/_/g, ' ');
-        const roleDescription = await getRoleDescription(roleNameForDesc);
-        if (roleDescription && !roleDescription.startsWith('❌')) {
-             await i.reply({ content: roleDescription, ephemeral: true });
-        } else if (cmd === 'ankieta') { 
+        // Usunięto obsługę dynamicznych komend ról
+        if (cmd === 'ankieta') { 
             await i.reply({content: "Ta komenda służy do interakcji z ankietami (głosowanie, sprawdzanie). Ankieta jest wysyłana automatycznie lub przez admina komendą `/ankieta_test_start`.", ephemeral: true});
         }
          else {
-            consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag} or no description found for "${roleNameForDesc}"`);
-            await i.reply({ content: 'Nieznana komenda lub brak opisu dla tej roli.', ephemeral: true });
+            // Jeśli to nie jest żadna ze znanych statycznych komend, a dynamiczne są usunięte:
+            if (!['reload', 'ranking', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty'].includes(cmd)){
+                consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
+                await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
+            }
         }
 
 
@@ -1783,7 +1755,12 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             });
             consola.info(`Created temporary VC "${vcName}" (ID: ${newVc.id}) for ${member.user.tag}. Owner: ${member.id}`);
             
-            const controlTextChannelName = `panel-${newVc.id.slice(-6)}`; 
+            let creatorNameForChannel = member.displayName.toLowerCase().replace(/\s+/g, '-');
+            creatorNameForChannel = creatorNameForChannel.replace(/[^a-z0-9-]/g, '');
+            if (creatorNameForChannel.length > 25) creatorNameForChannel = creatorNameForChannel.substring(0, 25);
+            if (creatorNameForChannel.length === 0) creatorNameForChannel = 'uzytkownika';
+            const controlTextChannelName = `czat-${creatorNameForChannel}`; 
+
             const controlTextChannel = await guild.channels.create({
                 name: controlTextChannelName,
                 type: ChannelType.GuildText,
@@ -1857,6 +1834,20 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
 
     // --- Logika ochrony lobby gry ---
+    if (MONITORED_VC_ID && LOG_TEXT_CHANNEL_ID && newState.channelId === MONITORED_VC_ID && oldState.channelId !== MONITORED_VC_ID) {
+        try {
+            const logChannel = await client.channels.fetch(LOG_TEXT_CHANNEL_ID);
+            const monitoredChannel = await client.channels.fetch(MONITORED_VC_ID);
+            if (logChannel && logChannel.isTextBased() && monitoredChannel) {
+                const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                logChannel.send(`[${time}] Użytkownik ${member.user.tag} (<@${member.id}>) DOŁĄCZYŁ/A DO KANAŁU GŁOSOWEGO "${monitoredChannel.name}"`);
+            }
+        } catch (logError) {
+            consola.error("Error logging user join to voice channel:", logError);
+        }
+    }
+
+
     if (!gameLobbyChannel || !waitingRoomChannel) {
         return;
     }
@@ -1917,4 +1908,3 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
-
