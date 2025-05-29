@@ -24,6 +24,7 @@ const {
 } = require('discord.js');
 
 const fs = require('fs');
+const path = require('path'); // Dodano moduł path
 const axios = require('axios');
 const cheerio = require('cheerio');
 const consola = require('consola');
@@ -38,7 +39,7 @@ const {
     CHANNEL_ID, 
     ROLE_ID,    
     DOC_URL,
-    GUILD_ID,
+    GUILD_ID, // Kluczowe dla działania na jednym serwerze
     LEADER_ROLE_ID, 
     PANEL_CHANNEL_ID, 
     QUEUE_CHANNEL_ID, 
@@ -61,36 +62,46 @@ if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !CHANNEL_ID || !ROLE_ID || !DOC
     }
 }
 
-// --- FILE HELPERS ---
-const ANKIETA_IMG_URL = 'https://i.imgur.com/kbcQMzE.jpeg'; // Zaktualizowany URL
+// --- DATA DIRECTORY SETUP ---
+// Użyj ścieżki montowania dysku z Render.com, jeśli jest dostępna, w przeciwnym razie użyj lokalnego podfolderu.
+const DATA_DIR = process.env.RENDER_DISK_MOUNT_PATH || path.join(__dirname, 'bot_data'); 
+
+// Upewnij się, że katalog danych istnieje (ważne przy pierwszym uruchomieniu na Render lub lokalnie)
+if (!fs.existsSync(DATA_DIR)){
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    consola.info(`Created data directory at: ${DATA_DIR}`);
+}
+
+// --- FILE HELPERS (Zaktualizowane ścieżki) ---
+const ANKIETA_IMG_URL = 'https://i.imgur.com/kbcQMzE.jpeg';
 const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png';
 
-const RANK_FILE = './rank.json'; 
-const WYNIK_RANK_FILE = './wynikRank.json';
-const PANEL_ID_FILE = './panel_message_id.txt';
-const QUEUE_MESSAGE_ID_FILE = './queue_message_id.txt';
-const FACTION_STATS_FILE = './factionStats.json'; 
+const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
+const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
+const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
+const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
+const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json'); 
 
-function loadJSON(path, defaultValue = {}) {
-    if (!fs.existsSync(path)) {
-        fs.writeFileSync(path, JSON.stringify(defaultValue, null, 2));
+function loadJSON(filePath, defaultValue = {}) { // Zmieniono 'path' na 'filePath' dla jasności
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
         return defaultValue;
     }
     try {
-        const fileContent = fs.readFileSync(path, 'utf8');
+        const fileContent = fs.readFileSync(filePath, 'utf8');
         if (fileContent.trim() === '') {
-            fs.writeFileSync(path, JSON.stringify(defaultValue, null, 2));
+            fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
             return defaultValue;
         }
         return JSON.parse(fileContent);
     } catch (error) {
-        consola.error(`Error parsing JSON from ${path}:`, error);
-        fs.writeFileSync(path, JSON.stringify(defaultValue, null, 2));
+        consola.error(`Error parsing JSON from ${filePath}:`, error);
+        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
         return defaultValue;
     }
 }
-function saveJSON(path, data) {
-    fs.writeFileSync(path, JSON.stringify(data, null, 2));
+function saveJSON(filePath, data) { // Zmieniono 'path' na 'filePath'
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 function loadFactionStats() {
@@ -143,9 +154,9 @@ function getWynikRanking(includeMvpMention = false, mvpUserId = null) {
 
 
 function recordPollVoteActivity(userId) { 
-    const pollActivity = loadJSON(RANK_FILE, {});
+    const pollActivity = loadJSON(RANK_FILE, {}); // Używa globalnej stałej RANK_FILE
     pollActivity[userId] = (pollActivity[userId] || 0) + 1;
-    saveJSON(RANK_FILE, pollActivity);
+    saveJSON(RANK_FILE, pollActivity); // Używa globalnej stałej RANK_FILE
     consola.info(`[Poll Activity] Recorded vote for ${userId}. Total votes for this cycle: ${pollActivity[userId]}`);
 }
 function addPollPoints(userId) { 
@@ -154,26 +165,26 @@ function addPollPoints(userId) {
 }
 
 function resetPollActivityData() { 
-    saveJSON(RANK_FILE, {});
+    saveJSON(RANK_FILE, {}); // Używa globalnej stałej RANK_FILE
     consola.info('📉 Dane aktywności w ankietach (rank.json) do śledzenia pierwszego głosu zresetowane.');
 }
 
 
 function savePanelMessageId(id) {
-    fs.writeFileSync(PANEL_ID_FILE, id, 'utf8');
+    fs.writeFileSync(PANEL_ID_FILE, id, 'utf8'); // Używa globalnej stałej PANEL_ID_FILE
 }
 function loadPanelMessageId() {
-    if (fs.existsSync(PANEL_ID_FILE)) {
+    if (fs.existsSync(PANEL_ID_FILE)) { // Używa globalnej stałej PANEL_ID_FILE
         return fs.readFileSync(PANEL_ID_FILE, 'utf8');
     }
     return '';
 }
 
 function saveQueueMessageId(id) {
-    fs.writeFileSync(QUEUE_MESSAGE_ID_FILE, id, 'utf8');
+    fs.writeFileSync(QUEUE_MESSAGE_ID_FILE, id, 'utf8'); // Używa globalnej stałej QUEUE_MESSAGE_ID_FILE
 }
 function loadQueueMessageId() {
-    if (fs.existsSync(QUEUE_MESSAGE_ID_FILE)) {
+    if (fs.existsSync(QUEUE_MESSAGE_ID_FILE)) { // Używa globalnej stałej QUEUE_MESSAGE_ID_FILE
         return fs.readFileSync(QUEUE_MESSAGE_ID_FILE, 'utf8');
     }
     return '';
@@ -326,7 +337,7 @@ async function registerCommands() {
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     try {
         await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), // Rejestracja dla konkretnego serwera
             { body: cmds }
         );
         consola.success(`✅ Registered ${cmds.length} commands in guild ${GUILD_ID}`);
@@ -561,8 +572,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie niżej
-
+const temporaryVoiceChannels = new Map(); 
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -687,7 +697,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
         new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
         new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'), 
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('�') 
+        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥') 
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'), 
@@ -704,7 +714,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); // Globalna deklaracja
+// const temporaryVoiceChannels = new Map(); // Poprawka: Ta linia była zbędna, deklaracja jest globalna
 
 
 async function manualStartPoll(interaction) {
