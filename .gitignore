@@ -1,0 +1,4 @@
+node_modules/
+.env
+*.log
+# Inne pliki, których nie chcesz wysyłać na GitHuba
