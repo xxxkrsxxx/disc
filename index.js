@@ -105,7 +105,7 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; 
-const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; 
+const RANKING_IMG_URL = 'https://imgur.com/rF0YAFC.jpeg'; 
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
