@@ -81,7 +81,7 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; 
-const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; // Używane jako thumbnail i główny obrazek rankingu
+const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; 
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
@@ -236,7 +236,12 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
-    // Usunięto komendę /wynikirank
+    cmds.push(
+        new SlashCommandBuilder()
+            .setName('wynikirank')
+            .setDescription('Pokaż ranking punktów.') 
+            .toJSON()
+    );
     cmds.push(
         new SlashCommandBuilder()
             .setName('zakoncz') 
@@ -342,8 +347,8 @@ async function registerCommands() {
 // --- PANEL EMBED & ROW ---
 function getPanelEmbed() {
     return new EmbedBuilder()
-        .setTitle('Admin Table Stats') // Zmieniony tytuł
-        .setDescription('Kliknij przycisk poniżej, aby zobaczyć ranking!'); // Opis może pozostać lub zostać zmieniony
+        .setTitle('Admin Table Stats') 
+        .setDescription('Kliknij przycisk poniżej, aby zobaczyć ranking!'); 
 }
 function getPanelRow() { 
     return new ActionRowBuilder().addComponents(
@@ -547,7 +552,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-const temporaryVoiceChannels = new Map(); 
+// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -990,11 +995,11 @@ client.once('ready', async () => {
                 }
 
                 const embed = new EmbedBuilder()
-                    .setTitle('🔪MVP AMONG TYGODNIA�') 
+                    .setTitle('🔪MVP AMONG TYGODNIA🔪') 
                     .setDescription(rankingDescription + mvpAnnouncement) 
                     .setColor(0xDAA520) 
                     .setThumbnail(RANKING_IMG_URL)
-                    .setImage(RANKING_IMG_URL) // Używamy tej samej grafiki jako głównego obrazu
+                    .setImage(RANKING_IMG_URL) 
                     .setFooter({ text: "Gratulacje!!" }); 
                 await targetChannel.send({ embeds: [embed] });
             } else {
@@ -1024,7 +1029,7 @@ client.on('interactionCreate', async i => {
                     .setTitle('Admin Table Stats') 
                     .setColor(0xDAA520)
                     .setThumbnail(RANKING_IMG_URL)
-                    .setImage(RANKING_IMG_URL) // Używamy tej samej grafiki jako głównego obrazu
+                    .setImage(RANKING_IMG_URL) 
                     .setDescription(getWynikRanking(true, currentMvpId)); 
                 return i.update({ embeds: [embed], components: [getPanelRow()] }); 
             }
@@ -1695,7 +1700,7 @@ client.on('interactionCreate', async i => {
             await i.reply({content: "Ta komenda służy do interakcji z ankietami (głosowanie, sprawdzanie). Ankieta jest wysyłana automatycznie lub przez admina komendą `/ankieta_test_start`.", ephemeral: true});
         } else {
             const knownCommands = ['reload', 'ranking', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty'];
-            if (!knownCommands.includes(cmd)){ // Sprawdź, czy komenda jest znana, zanim odpowiesz "Nieznana komenda"
+            if (!knownCommands.includes(cmd)){ 
                 consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
                 await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
             }
@@ -1973,4 +1978,3 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
-
