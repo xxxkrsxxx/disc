@@ -219,9 +219,8 @@ const CELEBRATION_GIFS = [
     'https://media.tenor.com/tS25EkQ9T6rAAAAC/among-us-among-us-meme.gif',
     'https://i.imgur.com/bSkJs.gif'  
 ];
-
-const WINNING_POLL_GIFS = CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif')); // Bierzemy tylko te, które są na pewno GIFami
-if (WINNING_POLL_GIFS.length === 0) { // Fallback, jeśli żaden z linków nie jest bezpośredni
+const WINNING_POLL_GIFS = CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif')); 
+if (WINNING_POLL_GIFS.length === 0) { 
     WINNING_POLL_GIFS.push('https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif');
 }
 
@@ -389,7 +388,7 @@ function determineWinnerDescriptionForMainEmbed(votesCollection) {
 }
 
 function buildPollEmbeds(currentVotesCollection, isFinal = false) {
-    const mainPollTitle = isFinal ? '🔪 Głosowanie Zakończone! 🔪' : '🔪 AMONG WIECZORKIEM? �';
+    const mainPollTitle = isFinal ? '🔪 Głosowanie Zakończone! 🔪' : '🔪 AMONG WIECZORKIEM? 🔪';
     const mainPollDescription = isFinal ? determineWinnerDescriptionForMainEmbed(currentVotesCollection) : 'O której godzinie wejdziesz pokazać, że to Ty jesteś najlepszym graczem?'; 
 
     const mainImageEmbed = new EmbedBuilder()
@@ -502,7 +501,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             }
         } else if (winnerTime === 'tie') {
             summaryTitle = `🤝 Mamy Remis! 🤝`;
-            gifUrl = TIE_POLL_GIF; // Używamy pojedynczego GIFa dla remisu
+            gifUrl = TIE_POLL_GIF; 
             summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
             summaryEmbed.setDescription(summaryDescription);
 
@@ -553,7 +552,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie niżej
+// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -687,7 +686,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     );
 
     const components = [row1];
-    if (row2.components.length > 0) {
+    if (row2.components.length > 0) { // Upewnij się, że row2 ma komponenty przed dodaniem
         components.push(row2);
     }
     consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
@@ -699,7 +698,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); // Upewniono się, że jest odkomentowane
+const temporaryVoiceChannels = new Map(); // Upewniono się, że jest odkomentowane i globalne
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -1761,12 +1760,8 @@ function formatDuration(durationMs) {
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     consola.info(`[voiceStateUpdate] Triggered. Old channel: ${oldState.channelId}, New channel: ${newState.channelId}, User: ${newState.member?.user.tag}`);
-    if (typeof temporaryVoiceChannels !== 'undefined' && temporaryVoiceChannels instanceof Map) {
-        consola.info(`[voiceStateUpdate] temporaryVoiceChannels is a Map with ${temporaryVoiceChannels.size} entries.`);
-    } else {
-        consola.error(`[voiceStateUpdate] temporaryVoiceChannels is NOT a Map or is undefined. Type: ${typeof temporaryVoiceChannels}`);
-    }
-
+    // Usunięto logowanie typu temporaryVoiceChannels, ponieważ błąd został naprawiony
+    
     const guild = newState.guild || oldState.guild;
     if (!guild) return;
 
@@ -1860,7 +1855,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                     },
                     { 
                         id: guild.roles.everyone,
-                        allow: [PermissionsBitField.Flags.Connect], 
+                        allow: [PermissionsBitField.Flags.Connect], // Zmieniono na allow, aby kanał był domyślnie odblokowany
                         type: OverwriteType.Role
                     }
                 ],
@@ -1896,7 +1891,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
             await member.voice.setChannel(newVc); 
             
-            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id); 
+            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id); // isLocked: false
             consola.info(`[Temp VC] Attempting to send control panel to #${controlTextChannel.name}. Content:`, JSON.stringify(controlPanelMessageContent, null, 2));
             const panelMessage = await controlTextChannel.send(controlPanelMessageContent);
             consola.info(`[Temp VC] Control panel message sent with ID: ${panelMessage.id}. Components length: ${panelMessage.components?.length}`);
@@ -1907,7 +1902,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 vcId: newVc.id, 
                 controlTextChannelId: controlTextChannel.id, 
                 panelMessageId: panelMessage.id, 
-                isLocked: false 
+                isLocked: false // Domyślnie odblokowany
             });
             
             await member.send(`Twój prywatny kanał głosowy **${vcName}** (<#${newVc.id}>) został utworzony! Jest domyślnie **odblokowany**. Możesz nim zarządzać na kanale <#${controlTextChannel.id}>.`).catch(dmErr => consola.warn(`Nie udało się wysłać DM o utworzeniu kanału do ${member.user.tag}: ${dmErr.message}`));
@@ -2006,3 +2001,4 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
+
