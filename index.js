@@ -47,20 +47,29 @@ const {
     MVP_ROLE_ID,
     TEMP_VC_CONTROL_PANEL_CATEGORY_ID,
     MONITORED_VC_ID, 
-    LOG_TEXT_CHANNEL_ID 
+    LOG_TEXT_CHANNEL_ID,
+    DEFAULT_POLL_CHANNEL_ID, // Dodano dla fallbacku
+    DEFAULT_PANEL_CHANNEL_ID, // Dodano dla fallbacku
+    DEFAULT_QUEUE_CHANNEL_ID  // Dodano dla fallbacku
 } = process.env;
 
-if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !CHANNEL_ID || !ROLE_ID || !GUILD_ID || !LEADER_ROLE_ID || !PANEL_CHANNEL_ID || !QUEUE_CHANNEL_ID || !GAME_LOBBY_VOICE_CHANNEL_ID || !WAITING_ROOM_VOICE_CHANNEL_ID || !VOICE_CREATOR_CHANNEL_ID || !TEMP_CHANNEL_CATEGORY_ID || !TEMP_VC_CONTROL_PANEL_CATEGORY_ID ) {
-    consola.warn('⚠️ One or more critical ENV variables might be missing. Ensure all required ones are set.');
-    if (!MVP_ROLE_ID) consola.warn("MVP_ROLE_ID is missing, MVP award feature will be disabled.");
-    if (!VOICE_CREATOR_CHANNEL_ID || !TEMP_CHANNEL_CATEGORY_ID) consola.warn("VOICE_CREATOR_CHANNEL_ID or TEMP_CHANNEL_CATEGORY_ID are missing, temporary voice channel creation will be disabled.");
-    if (!TEMP_VC_CONTROL_PANEL_CATEGORY_ID) consola.warn("TEMP_VC_CONTROL_PANEL_CATEGORY_ID is missing, temporary voice channel control panel creation in a channel will be disabled.");
-    if (!MONITORED_VC_ID || !LOG_TEXT_CHANNEL_ID) consola.warn("MONITORED_VC_ID or LOG_TEXT_CHANNEL_ID are missing, voice join/leave logging will be disabled.");
-    if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID) {
-        consola.error('❌ Critical ENV variables (TOKEN, CLIENT_ID, OWNER_ID) are missing!');
-        process.exit(1);
-    }
+if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
+    consola.error('❌ Critical ENV variables (TOKEN, CLIENT_ID, OWNER_ID, GUILD_ID, LEADER_ROLE_ID) are missing!');
+    process.exit(1);
 }
+if (!CHANNEL_ID && !DEFAULT_POLL_CHANNEL_ID) consola.warn("CHANNEL_ID and DEFAULT_POLL_CHANNEL_ID are missing, poll features might be affected.");
+if (!ROLE_ID) consola.warn("ROLE_ID for polls is missing.");
+if (!PANEL_CHANNEL_ID && !DEFAULT_PANEL_CHANNEL_ID) consola.warn("PANEL_CHANNEL_ID and DEFAULT_PANEL_CHANNEL_ID are missing, ranking panel will not be displayed.");
+if (!QUEUE_CHANNEL_ID && !DEFAULT_QUEUE_CHANNEL_ID) consola.warn("QUEUE_CHANNEL_ID and DEFAULT_QUEUE_CHANNEL_ID are missing, queue system might not function correctly.");
+if (!GAME_LOBBY_VOICE_CHANNEL_ID) consola.warn("GAME_LOBBY_VOICE_CHANNEL_ID is missing, lobby protection disabled.");
+if (!WAITING_ROOM_VOICE_CHANNEL_ID) consola.warn("WAITING_ROOM_VOICE_CHANNEL_ID is missing, lobby protection might not redirect correctly.");
+if (!VOICE_CREATOR_CHANNEL_ID) consola.warn("VOICE_CREATOR_CHANNEL_ID is missing, temporary voice channel creation will be disabled.");
+if (!TEMP_CHANNEL_CATEGORY_ID) consola.warn("TEMP_CHANNEL_CATEGORY_ID is missing, temporary voice channels might not be categorized correctly.");
+if (!MVP_ROLE_ID) consola.warn("MVP_ROLE_ID is missing, MVP award feature will be disabled.");
+if (!TEMP_VC_CONTROL_PANEL_CATEGORY_ID) consola.warn("TEMP_VC_CONTROL_PANEL_CATEGORY_ID is missing, temporary voice channel control panel creation in a channel will be disabled.");
+if (!MONITORED_VC_ID) consola.warn("MONITORED_VC_ID is missing, voice join/leave logging for specific channel will be disabled.");
+if (!LOG_TEXT_CHANNEL_ID) consola.warn("LOG_TEXT_CHANNEL_ID is missing, voice join/leave logging will be disabled.");
+
 
 // --- DATA DIRECTORY SETUP ---
 const DATA_DIR = process.env.RENDER_DISK_MOUNT_PATH || path.join(__dirname, 'bot_data'); 
@@ -73,7 +82,7 @@ if (!fs.existsSync(DATA_DIR)){
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; 
 const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; 
-const MAIN_RANKING_IMAGE_URL = 'https://i.imgur.com/YqYm9oR.jpeg'; 
+// const MAIN_RANKING_IMAGE_URL = 'https://i.imgur.com/YqYm9oR.jpeg'; // Usunięto, bo link nie działał
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
@@ -189,38 +198,33 @@ function loadQueueMessageId() {
     return '';
 }
 
-// Zaktualizowane listy GIF-ów
-const CELEBRATION_GIFS = [ // Gify na wygraną godzinę
+const WINNING_POLL_GIFS = [ 
     'https://media.tenor.com/npVhw1RtprpAAAAC/among-us-orange.gif',
     'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif',
     'https://media.tenor.com/ir9j4owKpVpAAAAC/among-us-dance.gif',
     'https://media.tenor.com/rNzAMsfUpCOAAAAC/among-us-crewmate.gif',
-    'https://media.tenor.com/5peE.gif', // Tenor ID, bezpośredni link może być inny
-    'https://media.tenor.com/bIjZo.gif', // Tenor ID
+    'https://i.imgur.com/5peE.gif', 
+    'https://i.imgur.com/bIjZo.gif', 
     'https://media.tenor.com/ukUQgPg9ondAAAAC/among-us.gif',
-    'https://media.tenor.com/9826.gif', // Tenor ID
+    'https://i.imgur.com/9826.gif', 
     'https://media.tenor.com/Hz3ckWksWmAAAAAC/among-us-among-us-vent.gif',
-    'https://media.tenor.com/bh6IV.gif', // Tenor ID
-    'https://media.tenor.com/b2lcx.gif', // Tenor ID
+    'https://i.imgur.com/bh6IV.gif', 
+    'https://i.imgur.com/b2lcx.gif', 
     'https://media.tenor.com/dhyB3hJ6EwdAAAAC/among-us-orange.gif',
     'https://media.tenor.com/vrFOtiD1pHQAAAAC/among-us-spin.gif',
     'https://media.tenor.com/dE7W4HeG1klAAAAC/among-us-yellow.gif',
-    'https://media.tenor.com/beNJu.gif', // Tenor ID
-    'https://media.tenor.com/vxVQ.gif', // Tenor ID
-    'https://media.tenor.com/bQ0n0.gif', // Tenor ID
+    'https://i.imgur.com/beNJu.gif', 
+    'https://i.imgur.com/vxVQ.gif', 
+    'https://i.imgur.com/bQ0n0.gif', 
     'https://media.tenor.com/tS25EkQ9T6rAAAAC/among-us-among-us-meme.gif',
-    'https://media.tenor.com/bSkJs.gif'  // Tenor ID
-];
-// Uwaga: Niektóre linki Tenor ID mogą nie działać bezpośrednio w setImage. Lepiej jest znaleźć bezpośrednie linki do GIF-ów.
-// Dla przykładu, zastąpię te, które są tylko ID, bardziej ogólnymi, działającymi linkami.
-// Jeśli masz bezpośrednie linki .gif do tych z ID, podmień je tutaj.
-const WINNING_POLL_GIFS = CELEBRATION_GIFS.map(gif => {
+    'https://i.imgur.com/bSkJs.gif'  
+].map(gif => { 
     if (gif.includes("AAAAC") || gif.endsWith(".gif")) return gif;
-    return 'https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif'; // Fallback dla niebezpośrednich linków
+    return 'https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif'; 
 });
 
 
-const TIE_POLL_GIF = 'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif'; // Jeden specyficzny dla remisu
+const TIE_POLL_GIF = 'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif'; 
 const NO_VOTES_GIF = 'https://c.tenor.com/x65m9H2F0wAAAAAC/among-us.gif'; 
 const DEFAULT_POLL_GIF = 'https://c.tenor.com/Z3z0vYATH_IAAAAC/among-us-task.gif'; 
 
@@ -496,7 +500,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             }
         } else if (winnerTime === 'tie') {
             summaryTitle = `🤝 Mamy Remis! 🤝`;
-            if (TIE_POLL_GIFS.length > 0) { // Zmieniono na TIE_POLL_GIFS
+            if (TIE_POLL_GIFS.length > 0) { 
                 gifUrl = TIE_POLL_GIFS[Math.floor(Math.random() * TIE_POLL_GIFS.length)];
             } else {
                 gifUrl = DEFAULT_POLL_GIF;
@@ -551,7 +555,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // Deklaracja globalna jest wyżej
+const temporaryVoiceChannels = new Map(); // Poprawiona deklaracja - powinna być tutaj, globalnie
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -688,7 +692,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     if (row2.components.length > 0) {
         components.push(row2);
     }
-
+    consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
     return { embeds: [embed], components: components };
 }
 
@@ -697,6 +701,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
+const temporaryVoiceChannels = new Map(); // POPRAWIONA DEKLARACJA - odkomentowana
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -771,7 +776,13 @@ client.once('ready', async () => {
             let panelMessageId = loadPanelMessageId(); 
             let panelMsg = null;
             if (panelMessageId) {
-                try { panelMsg = await panelCh.messages.fetch(panelMessageId); } catch { consola.warn("Nie udało się załadować panelMsg, tworzenie nowego."); }
+                try { 
+                    panelMsg = await panelCh.messages.fetch(panelMessageId); 
+                    consola.info(`[Panel] Loaded existing panel message (ID: ${panelMessageId}) from channel ${panelCh.name}`);
+                } catch (err){ 
+                    consola.warn(`[Panel] Failed to fetch existing panel message (ID: ${panelMessageId}), will create a new one. Error: ${err.message}`);
+                    panelMessageId = null; // Resetuj ID, jeśli wiadomość nie istnieje
+                }
             }
             
             const panelContent = { embeds: [getPanelEmbed()] };
@@ -782,17 +793,27 @@ client.once('ready', async () => {
                 panelContent.components = []; 
             }
 
-            if (!panelMsg) {
+            if (!panelMsg) { // Jeśli nie znaleziono wiadomości lub wystąpił błąd przy fetch
                 try {
+                    consola.info(`[Panel] No existing panel message found or fetch failed. Attempting to send a new one to ${panelCh.name}.`);
                     const sent = await panelCh.send(panelContent); 
                     savePanelMessageId(sent.id);
-                    consola.info(`Panel created (ID: ${sent.id}) in channel ${panelCh.name}`);
-                } catch (e) { consola.error("Failed to create new panel message:", e.message); }
+                    consola.info(`[Panel] New panel created (ID: ${sent.id}) in channel ${panelCh.name}`);
+                } catch (e) { consola.error("[Panel] Failed to create new panel message:", e.message); }
             } else {
                 try {
                     await panelMsg.edit(panelContent); 
-                    consola.info(`Panel refreshed (ID: ${panelMsg.id}) in channel ${panelCh.name}`);
-                } catch (e) { consola.error("Failed to refresh panel message:", e.message); }
+                    consola.info(`[Panel] Panel refreshed (ID: ${panelMsg.id}) in channel ${panelCh.name}`);
+                } catch (e) { 
+                    consola.error("[Panel] Failed to refresh existing panel message:", e.message);
+                    // Jeśli edycja się nie uda, spróbuj wysłać nową wiadomość jako fallback
+                    try {
+                        consola.warn(`[Panel] Attempting to send a new panel message as fallback to ${panelCh.name}.`);
+                        const sent = await panelCh.send(panelContent);
+                        savePanelMessageId(sent.id);
+                        consola.info(`[Panel] New panel created (fallback) (ID: ${sent.id}) in channel ${panelCh.name}`);
+                    } catch (e2) { consola.error("[Panel] Failed to create fallback panel message:", e2.message); }
+                }
             }
         }
     } else {
@@ -1336,10 +1357,8 @@ client.on('interactionCreate', async i => {
                 return;
             } else if (action === 'delete' && parts[2] === 'cancel') { 
                 await i.update({ content: 'Anulowano usuwanie kanału.', components: []});
-                const updatedPanel = await getTempVoiceChannelControlPanelMessage(voiceChannel.name, vcChannelId, channelData.isLocked, client, i.guildId);
-                if (i.message) { 
-                     await i.message.edit(updatedPanel).catch(e => consola.warn("Failed to re-edit panel on cancel:", e.message));
-                }
+                // Po anulowaniu, panel powinien pozostać taki jaki był, więc nie ma potrzeby go edytować, chyba że chcesz przywrócić przyciski
+                // Dla uproszczenia, po prostu zamykamy interakcję. Można by też odświeżyć panel.
                 return;
             } else if (action === 'delete'){ 
                  const confirmRow = new ActionRowBuilder().addComponents(
@@ -1745,12 +1764,8 @@ function formatDuration(durationMs) {
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     consola.info(`[voiceStateUpdate] Triggered. Old channel: ${oldState.channelId}, New channel: ${newState.channelId}, User: ${newState.member?.user.tag}`);
-    if (typeof temporaryVoiceChannels !== 'undefined' && temporaryVoiceChannels instanceof Map) {
-        consola.info(`[voiceStateUpdate] temporaryVoiceChannels is a Map with ${temporaryVoiceChannels.size} entries.`);
-    } else {
-        consola.error(`[voiceStateUpdate] temporaryVoiceChannels is NOT a Map or is undefined. Type: ${typeof temporaryVoiceChannels}`);
-    }
-
+    // Logowanie typu temporaryVoiceChannels zostało usunięte, ponieważ błąd powinien być naprawiony
+    
     const guild = newState.guild || oldState.guild;
     if (!guild) return;
 
@@ -1770,21 +1785,25 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
             if (newState.channelId === MONITORED_VC_ID && oldState.channelId !== MONITORED_VC_ID) {
                 monitoredVcSessionJoins.set(userId, Date.now());
+                consola.debug(`[VC Log] User ${userTag} joined monitored VC. Stored join time.`);
                 const joinEmbed = new EmbedBuilder()
                     .setColor(0x00FF00) // Green
                     .setAuthor({ name: `${userTag} (${userId})`, iconURL: userAvatar })
                     .setDescription(`➡️ <@${userId}> **dołączył/a** do kanału głosowego <#${MONITORED_VC_ID}> (${monitoredChannel.name})`)
                     .setTimestamp()
                     .setFooter({text: `Log Wejścia`});
-                logChannel.send({ embeds: [joinEmbed] }).catch(consola.error);
+                logChannel.send({ embeds: [joinEmbed] }).catch(e => consola.error("Error sending join log:", e));
             } 
             else if (oldState.channelId === MONITORED_VC_ID && newState.channelId !== MONITORED_VC_ID) {
                 const joinTimestamp = monitoredVcSessionJoins.get(userId);
-                let durationString = "Nieznany (bot mógł być zrestartowany lub był już na kanale)";
+                let durationString = "Nieznany (bot mógł być zrestartowany lub użytkownik był już na kanale przy starcie bota)";
                 if (joinTimestamp) {
                     const durationMs = Date.now() - joinTimestamp;
                     durationString = formatDuration(durationMs);
-                    monitoredVcSessionJoins.delete(userId);
+                    monitoredVcSessionJoins.delete(userId); // Usuń wpis po obliczeniu czasu
+                    consola.debug(`[VC Log] User ${userTag} left monitored VC. Calculated duration: ${durationString}`);
+                } else {
+                    consola.warn(`[VC Log] User ${userTag} left monitored VC, but no join timestamp was found.`);
                 }
                 const leaveEmbed = new EmbedBuilder()
                     .setColor(0xFF0000) // Red
@@ -1793,7 +1812,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                     .addFields({ name: 'Czas spędzony na kanale', value: durationString, inline: false })
                     .setTimestamp()
                     .setFooter({text: `Log Wyjścia`});
-                logChannel.send({ embeds: [leaveEmbed] }).catch(consola.error);
+                logChannel.send({ embeds: [leaveEmbed] }).catch(e => consola.error("Error sending leave log:", e));
             }
         } else {
             if (!monitoredChannel) consola.warn(`[VC Log] Monitored VC ID (${MONITORED_VC_ID}) not found or not a voice channel.`);
@@ -1986,3 +2005,4 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
+
