@@ -198,36 +198,33 @@ function loadQueueMessageId() {
     return '';
 }
 
-const CELEBRATION_GIFS = [ 
-    'https://media.tenor.com/npVhw1RtprpAAAAC/among-us-orange.gif',
-    'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif',
-    'https://media.tenor.com/ir9j4owKpVpAAAAC/among-us-dance.gif',
-    'https://media.tenor.com/rNzAMsfUpCOAAAAC/among-us-crewmate.gif',
-    'https://i.imgur.com/5peE.gif', 
-    'https://i.imgur.com/bIjZo.gif', 
-    'https://media.tenor.com/ukUQgPg9ondAAAAC/among-us.gif',
-    'https://i.imgur.com/9826.gif', 
-    'https://media.tenor.com/Hz3ckWksWmAAAAAC/among-us-among-us-vent.gif',
-    'https://i.imgur.com/bh6IV.gif', 
-    'https://i.imgur.com/b2lcx.gif', 
-    'https://media.tenor.com/dhyB3hJ6EwdAAAAC/among-us-orange.gif',
-    'https://media.tenor.com/vrFOtiD1pHQAAAAC/among-us-spin.gif',
-    'https://media.tenor.com/dE7W4HeG1klAAAAC/among-us-yellow.gif',
-    'https://i.imgur.com/beNJu.gif', 
-    'https://i.imgur.com/vxVQ.gif', 
-    'https://i.imgur.com/bQ0n0.gif', 
-    'https://media.tenor.com/tS25EkQ9T6rAAAAC/among-us-among-us-meme.gif',
-    'https://i.imgur.com/bSkJs.gif'  
+// Nowa lista GIF-ów
+const POLL_CELEBRATION_GIFS = [
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
+    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif?cid=ecf05e47j91g7yk6sdh8zw3gdmxxdnr7e59ghbmnnxw6ovt3&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/y0NFayaBeiWEU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XVR9lp9qUDHmU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif',
+    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif?cid=ecf05e475vymiwzh0ye6t2waznzlxf636qxggxts5gfoia63&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/s2qXK8wAvkHTO/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l2JJyDYEX1tXFmCd2/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWZkYWcxczc4eXZ6cGh2djRqMXhlOGVzcjhlbTZhcTE1cGppenEyNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/lPuW5AlR9AeWzSsIqi/giphy.gif',
+    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif?cid=ecf05e47ck41ogug5mi48qswfdaqwgoq74ujz8en0q9secwy&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/mCRJDo24UvJMA/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1kkxWqT5nvLXupUTwK/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MDJ9IbxxvDUQM/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/13CoXDiaCcCoyk/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/rcRwO8GMSfNV6/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/c4t11obaChpu0/giphy.gif',
+    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif?cid=ecf05e47qbn1ep9trptyxfbgykd8qb0s3pri0gugv7aqor8c&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnUxZG5wczZoM3VpNWFnanNkYmRiajN1dG95ZDNyaDJiNWhzc29iNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fQZX2aoRC1Tqw/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
-const WINNING_POLL_GIFS = CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif')); 
-if (WINNING_POLL_GIFS.length === 0) { 
-    WINNING_POLL_GIFS.push('https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif');
-}
 
-
-const TIE_POLL_GIF = 'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif'; 
-const NO_VOTES_GIF = 'https://c.tenor.com/x65m9H2F0wAAAAAC/among-us.gif'; 
-const DEFAULT_POLL_GIF = 'https://c.tenor.com/Z3z0vYATH_IAAAAC/among-us-task.gif'; 
+const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif'; // Confused Travolta
+const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif'; // Elmo shrug
+const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif'; // This is fine dog
 
 
 async function registerCommands() {
@@ -677,7 +674,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
         new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
         new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'), 
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥') 
+        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('�') 
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'), 
@@ -686,7 +683,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     );
 
     const components = [row1];
-    if (row2.components.length > 0) { // Upewnij się, że row2 ma komponenty przed dodaniem
+    if (row2.components.length > 0) { 
         components.push(row2);
     }
     consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
@@ -698,7 +695,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); // Upewniono się, że jest odkomentowane i globalne
+const temporaryVoiceChannels = new Map(); 
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -1760,7 +1757,6 @@ function formatDuration(durationMs) {
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     consola.info(`[voiceStateUpdate] Triggered. Old channel: ${oldState.channelId}, New channel: ${newState.channelId}, User: ${newState.member?.user.tag}`);
-    // Usunięto logowanie typu temporaryVoiceChannels, ponieważ błąd został naprawiony
     
     const guild = newState.guild || oldState.guild;
     if (!guild) return;
@@ -1902,7 +1898,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 vcId: newVc.id, 
                 controlTextChannelId: controlTextChannel.id, 
                 panelMessageId: panelMessage.id, 
-                isLocked: false // Domyślnie odblokowany
+                isLocked: false 
             });
             
             await member.send(`Twój prywatny kanał głosowy **${vcName}** (<#${newVc.id}>) został utworzony! Jest domyślnie **odblokowany**. Możesz nim zarządzać na kanale <#${controlTextChannel.id}>.`).catch(dmErr => consola.warn(`Nie udało się wysłać DM o utworzeniu kanału do ${member.user.tag}: ${dmErr.message}`));
