@@ -81,8 +81,7 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; 
-const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; 
-// const MAIN_RANKING_IMAGE_URL = 'https://i.imgur.com/YqYm9oR.jpeg'; // Usunięto, bo link nie działał
+const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; // Używane jako thumbnail i główny obrazek rankingu
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
@@ -198,7 +197,6 @@ function loadQueueMessageId() {
     return '';
 }
 
-// Nowa lista GIF-ów
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
     'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif?cid=ecf05e47j91g7yk6sdh8zw3gdmxxdnr7e59ghbmnnxw6ovt3&ep=v1_gifs_search&rid=giphy.gif&ct=g',
@@ -222,12 +220,10 @@ const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
 
-// POPRAWKA: Użyj poprawnej nazwy zmiennej
 const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif')); 
 if (WINNING_POLL_GIFS.length === 0) { 
     WINNING_POLL_GIFS.push('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif'); // Fallback
 }
-
 
 const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif'; 
 const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif'; 
@@ -240,12 +236,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('wynikirank')
-            .setDescription('Pokaż ranking punktów.') 
-            .toJSON()
-    );
+    // Usunięto komendę /wynikirank
     cmds.push(
         new SlashCommandBuilder()
             .setName('zakoncz') 
@@ -351,8 +342,8 @@ async function registerCommands() {
 // --- PANEL EMBED & ROW ---
 function getPanelEmbed() {
     return new EmbedBuilder()
-        .setTitle('Panel rankingów Among Us')
-        .setDescription('Ranking dostępny jest poprzez komendę /wynikirank'); 
+        .setTitle('Admin Table Stats') // Zmieniony tytuł
+        .setDescription('Kliknij przycisk poniżej, aby zobaczyć ranking!'); // Opis może pozostać lub zostać zmieniony
 }
 function getPanelRow() { 
     return new ActionRowBuilder().addComponents(
@@ -490,7 +481,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             }
 
             if (winnerTime === '19:00') {
-                summaryDescription = "🗳️ Godzina 19:00 wybrana przez Psychopatów!\n\n🧠  Wszyscy wiemy, że to jedyna pora żeby zdążyć zanim zacznie się... coś więcej.\n\n 🕖 Przyjdź punktualnie. Zaufanie zbudujemy tylko raz.";
+                summaryDescription = "🗳️ Godzina 19:00 wybrana przez Psychopatów!\n\n🧠  Wszyscy wiemy, że to jedyna pora żeby zdążyć zanim zacznie się... coś więcej.\n\n 🕖 Przyjdź punktualnie, bo później czeka Cię kolejka jak w PRL.";
             } else if (['20:00', '21:00', '22:00'].includes(winnerTime)) {
                 summaryDescription = `🗳️ Większość z was wyjątkowo zagłosowała na ${winnerTime}.${susMessagePart}`;
             } else { 
@@ -556,7 +547,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie
+const temporaryVoiceChannels = new Map(); 
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -681,7 +672,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
         new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
         new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'), 
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('�') 
+        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥') 
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'), 
@@ -702,7 +693,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); // POPRAWKA: Odkomentowano
+const temporaryVoiceChannels = new Map(); 
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -999,11 +990,11 @@ client.once('ready', async () => {
                 }
 
                 const embed = new EmbedBuilder()
-                    .setTitle('🔪MVP AMONG TYGODNIA🔪') 
+                    .setTitle('🔪MVP AMONG TYGODNIA�') 
                     .setDescription(rankingDescription + mvpAnnouncement) 
                     .setColor(0xDAA520) 
                     .setThumbnail(RANKING_IMG_URL)
-                    // .setImage(MAIN_RANKING_IMAGE_URL) // Usunięto, bo link nie działał
+                    .setImage(RANKING_IMG_URL) // Używamy tej samej grafiki jako głównego obrazu
                     .setFooter({ text: "Gratulacje!!" }); 
                 await targetChannel.send({ embeds: [embed] });
             } else {
@@ -1033,7 +1024,7 @@ client.on('interactionCreate', async i => {
                     .setTitle('Admin Table Stats') 
                     .setColor(0xDAA520)
                     .setThumbnail(RANKING_IMG_URL)
-                    // .setImage(MAIN_RANKING_IMAGE_URL) // Usunięto, bo link nie działał
+                    .setImage(RANKING_IMG_URL) // Używamy tej samej grafiki jako głównego obrazu
                     .setDescription(getWynikRanking(true, currentMvpId)); 
                 return i.update({ embeds: [embed], components: [getPanelRow()] }); 
             }
@@ -1517,26 +1508,6 @@ client.on('interactionCreate', async i => {
             await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
             return;
         }
-
-        if (cmd === 'wynikirank') {
-            const wr = loadWynikRank();
-            const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
-            let currentMvpId = null;
-            if (MVP_ROLE_ID && i.guild) { 
-                const mvpRole = await i.guild.roles.fetch(MVP_ROLE_ID).catch(() => null);
-                if (mvpRole) {
-                    const mvpMember = i.guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
-                    if (mvpMember) currentMvpId = mvpMember.id;
-                }
-            }
-            const embed = new EmbedBuilder()
-                .setTitle('Admin Table Stats') 
-                .setColor(0xDAA520)
-                .setThumbnail(RANKING_IMG_URL)
-                // .setImage(MAIN_RANKING_IMAGE_URL) // Usunięto, bo link nie działał
-                .setDescription(getWynikRanking(true, currentMvpId)); 
-            return i.reply({ embeds: [embed], ephemeral: true });
-        }
         
         if (cmd === 'reload') {
             if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
@@ -1724,7 +1695,7 @@ client.on('interactionCreate', async i => {
             await i.reply({content: "Ta komenda służy do interakcji z ankietami (głosowanie, sprawdzanie). Ankieta jest wysyłana automatycznie lub przez admina komendą `/ankieta_test_start`.", ephemeral: true});
         } else {
             const knownCommands = ['reload', 'ranking', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty'];
-            if (!knownCommands.includes(cmd)){
+            if (!knownCommands.includes(cmd)){ // Sprawdź, czy komenda jest znana, zanim odpowiesz "Nieznana komenda"
                 consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
                 await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
             }
@@ -2002,3 +1973,4 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
+
