@@ -222,9 +222,16 @@ const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
 
-const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif'; // Confused Travolta
-const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif'; // Elmo shrug
-const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif'; // This is fine dog
+// POPRAWKA: Użyj poprawnej nazwy zmiennej
+const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif')); 
+if (WINNING_POLL_GIFS.length === 0) { 
+    WINNING_POLL_GIFS.push('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif'); // Fallback
+}
+
+
+const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif'; 
+const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif'; 
+const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif'; 
 
 
 async function registerCommands() {
@@ -695,7 +702,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); 
+const temporaryVoiceChannels = new Map(); // POPRAWKA: Odkomentowano
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -1350,8 +1357,6 @@ client.on('interactionCreate', async i => {
                 return;
             } else if (action === 'delete' && parts[2] === 'cancel') { 
                 await i.update({ content: 'Anulowano usuwanie kanału.', components: []});
-                // Po anulowaniu, panel powinien pozostać taki jaki był, więc nie ma potrzeby go edytować, chyba że chcesz przywrócić przyciski
-                // Dla uproszczenia, po prostu zamykamy interakcję. Można by też odświeżyć panel.
                 return;
             } else if (action === 'delete'){ 
                  const confirmRow = new ActionRowBuilder().addComponents(
@@ -1851,7 +1856,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                     },
                     { 
                         id: guild.roles.everyone,
-                        allow: [PermissionsBitField.Flags.Connect], // Zmieniono na allow, aby kanał był domyślnie odblokowany
+                        allow: [PermissionsBitField.Flags.Connect], 
                         type: OverwriteType.Role
                     }
                 ],
@@ -1887,7 +1892,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
             await member.voice.setChannel(newVc); 
             
-            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id); // isLocked: false
+            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id); 
             consola.info(`[Temp VC] Attempting to send control panel to #${controlTextChannel.name}. Content:`, JSON.stringify(controlPanelMessageContent, null, 2));
             const panelMessage = await controlTextChannel.send(controlPanelMessageContent);
             consola.info(`[Temp VC] Control panel message sent with ID: ${panelMessage.id}. Components length: ${panelMessage.components?.length}`);
@@ -1997,4 +2002,3 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
-
