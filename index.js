@@ -48,9 +48,9 @@ const {
     TEMP_VC_CONTROL_PANEL_CATEGORY_ID,
     MONITORED_VC_ID, 
     LOG_TEXT_CHANNEL_ID,
-    DEFAULT_POLL_CHANNEL_ID, // Dodano dla fallbacku
-    DEFAULT_PANEL_CHANNEL_ID, // Dodano dla fallbacku
-    DEFAULT_QUEUE_CHANNEL_ID  // Dodano dla fallbacku
+    DEFAULT_POLL_CHANNEL_ID, 
+    DEFAULT_PANEL_CHANNEL_ID, 
+    DEFAULT_QUEUE_CHANNEL_ID  
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -198,7 +198,7 @@ function loadQueueMessageId() {
     return '';
 }
 
-const WINNING_POLL_GIFS = [ 
+const CELEBRATION_GIFS = [ 
     'https://media.tenor.com/npVhw1RtprpAAAAC/among-us-orange.gif',
     'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif',
     'https://media.tenor.com/ir9j4owKpVpAAAAC/among-us-dance.gif',
@@ -218,10 +218,12 @@ const WINNING_POLL_GIFS = [
     'https://i.imgur.com/bQ0n0.gif', 
     'https://media.tenor.com/tS25EkQ9T6rAAAAC/among-us-among-us-meme.gif',
     'https://i.imgur.com/bSkJs.gif'  
-].map(gif => { 
-    if (gif.includes("AAAAC") || gif.endsWith(".gif")) return gif;
-    return 'https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif'; 
-});
+];
+
+const WINNING_POLL_GIFS = CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif')); // Bierzemy tylko te, które są na pewno GIFami
+if (WINNING_POLL_GIFS.length === 0) { // Fallback, jeśli żaden z linków nie jest bezpośredni
+    WINNING_POLL_GIFS.push('https://media.tenor.com/V5L0vjZ0lVcAAAAC/among-us-dance.gif');
+}
 
 
 const TIE_POLL_GIF = 'https://media.tenor.com/bkl7VKqN0ckAAAAC/among-us-among-us-spin.gif'; 
@@ -387,7 +389,7 @@ function determineWinnerDescriptionForMainEmbed(votesCollection) {
 }
 
 function buildPollEmbeds(currentVotesCollection, isFinal = false) {
-    const mainPollTitle = isFinal ? '🔪 Głosowanie Zakończone! 🔪' : '🔪 AMONG WIECZORKIEM? 🔪';
+    const mainPollTitle = isFinal ? '🔪 Głosowanie Zakończone! 🔪' : '🔪 AMONG WIECZORKIEM? �';
     const mainPollDescription = isFinal ? determineWinnerDescriptionForMainEmbed(currentVotesCollection) : 'O której godzinie wejdziesz pokazać, że to Ty jesteś najlepszym graczem?'; 
 
     const mainImageEmbed = new EmbedBuilder()
@@ -500,11 +502,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             }
         } else if (winnerTime === 'tie') {
             summaryTitle = `🤝 Mamy Remis! 🤝`;
-            if (TIE_POLL_GIFS.length > 0) { 
-                gifUrl = TIE_POLL_GIFS[Math.floor(Math.random() * TIE_POLL_GIFS.length)];
-            } else {
-                gifUrl = DEFAULT_POLL_GIF;
-            }
+            gifUrl = TIE_POLL_GIF; // Używamy pojedynczego GIFa dla remisu
             summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
             summaryEmbed.setDescription(summaryDescription);
 
@@ -555,7 +553,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-const temporaryVoiceChannels = new Map(); // Poprawiona deklaracja - powinna być tutaj, globalnie
+// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie niżej
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -701,7 +699,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection(); 
 let voteMessage = null; 
-const temporaryVoiceChannels = new Map(); // POPRAWIONA DEKLARACJA - odkomentowana
+const temporaryVoiceChannels = new Map(); // Upewniono się, że jest odkomentowane
 const monitoredVcSessionJoins = new Map(); 
 
 
@@ -781,7 +779,7 @@ client.once('ready', async () => {
                     consola.info(`[Panel] Loaded existing panel message (ID: ${panelMessageId}) from channel ${panelCh.name}`);
                 } catch (err){ 
                     consola.warn(`[Panel] Failed to fetch existing panel message (ID: ${panelMessageId}), will create a new one. Error: ${err.message}`);
-                    panelMessageId = null; // Resetuj ID, jeśli wiadomość nie istnieje
+                    panelMessageId = null; 
                 }
             }
             
@@ -793,7 +791,7 @@ client.once('ready', async () => {
                 panelContent.components = []; 
             }
 
-            if (!panelMsg) { // Jeśli nie znaleziono wiadomości lub wystąpił błąd przy fetch
+            if (!panelMsg) { 
                 try {
                     consola.info(`[Panel] No existing panel message found or fetch failed. Attempting to send a new one to ${panelCh.name}.`);
                     const sent = await panelCh.send(panelContent); 
@@ -806,7 +804,6 @@ client.once('ready', async () => {
                     consola.info(`[Panel] Panel refreshed (ID: ${panelMsg.id}) in channel ${panelCh.name}`);
                 } catch (e) { 
                     consola.error("[Panel] Failed to refresh existing panel message:", e.message);
-                    // Jeśli edycja się nie uda, spróbuj wysłać nową wiadomość jako fallback
                     try {
                         consola.warn(`[Panel] Attempting to send a new panel message as fallback to ${panelCh.name}.`);
                         const sent = await panelCh.send(panelContent);
@@ -1764,8 +1761,12 @@ function formatDuration(durationMs) {
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     consola.info(`[voiceStateUpdate] Triggered. Old channel: ${oldState.channelId}, New channel: ${newState.channelId}, User: ${newState.member?.user.tag}`);
-    // Logowanie typu temporaryVoiceChannels zostało usunięte, ponieważ błąd powinien być naprawiony
-    
+    if (typeof temporaryVoiceChannels !== 'undefined' && temporaryVoiceChannels instanceof Map) {
+        consola.info(`[voiceStateUpdate] temporaryVoiceChannels is a Map with ${temporaryVoiceChannels.size} entries.`);
+    } else {
+        consola.error(`[voiceStateUpdate] temporaryVoiceChannels is NOT a Map or is undefined. Type: ${typeof temporaryVoiceChannels}`);
+    }
+
     const guild = newState.guild || oldState.guild;
     if (!guild) return;
 
@@ -1800,7 +1801,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 if (joinTimestamp) {
                     const durationMs = Date.now() - joinTimestamp;
                     durationString = formatDuration(durationMs);
-                    monitoredVcSessionJoins.delete(userId); // Usuń wpis po obliczeniu czasu
+                    monitoredVcSessionJoins.delete(userId); 
                     consola.debug(`[VC Log] User ${userTag} left monitored VC. Calculated duration: ${durationString}`);
                 } else {
                     consola.warn(`[VC Log] User ${userTag} left monitored VC, but no join timestamp was found.`);
@@ -2005,4 +2006,3 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
-
