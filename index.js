@@ -48,25 +48,21 @@ const {
     TEMP_VC_CONTROL_PANEL_CATEGORY_ID,
     MONITORED_VC_ID, 
     LOG_TEXT_CHANNEL_ID,
-    WELCOME_DM_VC_ID, // NOWA ZMIENNA dla DM powitalnego
+    WELCOME_DM_VC_ID, 
     DEFAULT_POLL_CHANNEL_ID, 
     DEFAULT_PANEL_CHANNEL_ID, 
     DEFAULT_QUEUE_CHANNEL_ID  
 } = process.env;
 
-// Podstawowa walidacja krytycznych zmiennych
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
     consola.error('❌ Critical ENV variables (TOKEN, CLIENT_ID, OWNER_ID, GUILD_ID, LEADER_ROLE_ID) are missing!');
     process.exit(1);
 }
-
-// Opcjonalne zmienne - logowanie ostrzeżeń
 function checkEnvVar(varName, value, featureName, isCritical = false) {
     if (!value) {
         const message = `ENV variable ${varName} is missing, ${featureName} feature might be affected or disabled.`;
         if (isCritical) {
             consola.error(`❌ CRITICAL: ${message}`);
-            // Można by tu dodać process.exit(1) jeśli zmienna jest absolutnie krytyczna dla działania podstawowych funkcji
         } else {
             consola.warn(`⚠️ ${message}`);
         }
@@ -74,8 +70,7 @@ function checkEnvVar(varName, value, featureName, isCritical = false) {
     }
     return true;
 }
-
-checkEnvVar('CHANNEL_ID', CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID, 'Polls (scheduled/test command)', true); // Kanał ankiet jest dość ważny
+checkEnvVar('CHANNEL_ID', CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID, 'Polls (scheduled/test command)', true); 
 checkEnvVar('ROLE_ID', ROLE_ID, 'Poll pings');
 checkEnvVar('PANEL_CHANNEL_ID', PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID, 'Ranking panel display');
 checkEnvVar('QUEUE_CHANNEL_ID', QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID, 'Queue system');
@@ -99,19 +94,20 @@ if (!fs.existsSync(DATA_DIR)){
         consola.info(`Created data directory at: ${DATA_DIR}`);
     } catch (err) {
         consola.error(`Failed to create data directory at ${DATA_DIR}:`, err);
-        process.exit(1); // Krytyczny błąd, jeśli nie można utworzyć folderu danych
+        process.exit(1); 
     }
 }
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg'; 
-const RANKING_IMG_URL = 'https://imgur.com/rF0YAFC.jpeg'; 
+const RANKING_IMG_URL = 'https://i.ibb.co/zWG5KfW/image.png'; 
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json'); 
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
 const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt'); 
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
 const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json'); 
+const WELCOME_DM_SENT_USERS_FILE = path.join(DATA_DIR, 'welcomeDmSentUsers.json');
 
 function loadJSON(filePath, defaultValue = {}) { 
     if (!fs.existsSync(filePath)) {
@@ -120,7 +116,7 @@ function loadJSON(filePath, defaultValue = {}) {
             return defaultValue;
         } catch (err) {
             consola.error(`Failed to write initial JSON to ${filePath}:`, err);
-            return defaultValue; // Zwróć domyślną wartość w przypadku błędu zapisu
+            return defaultValue; 
         }
     }
     try {
@@ -236,23 +232,23 @@ function loadQueueMessageId() {
 
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
-    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif?cid=ecf05e47j91g7yk6sdh8zw3gdmxxdnr7e59ghbmnnxw6ovt3&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/y0NFayaBeiWEU/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XVR9lp9qUDHmU/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif', 
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif',
-    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif?cid=ecf05e475vymiwzh0ye6t2waznzlxf636qxggxts5gfoia63&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/s2qXK8wAvkHTO/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l2JJyDYEX1tXFmCd2/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWZkYWcxczc4eXZ6cGh2djRqMXhlOGVzcjhlbTZhcTE1cGppenEyNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/lPuW5AlR9AeWzSsIqi/giphy.gif',
-    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif?cid=ecf05e47ck41ogug5mi48qswfdaqwgoq74ujz8en0q9secwy&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/mCRJDo24UvJMA/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1kkxWqT5nvLXupUTwK/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MDJ9IbxxvDUQM/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/13CoXDiaCcCoyk/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/rcRwO8GMSfNV6/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/c4t11obaChpu0/giphy.gif',
-    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif?cid=ecf05e47qbn1ep9trptyxfbgykd8qb0s3pri0gugv7aqor8c&ep=v1_gifs_search&rid=giphy.gif&ct=g',
+    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnUxZG5wczZoM3VpNWFnanNkYmRiajN1dG95ZDNyaDJiNWhzc29iNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fQZX2aoRC1Tqw/giphy.gif',
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
@@ -381,16 +377,33 @@ async function registerCommands() {
 }
 
 // --- PANEL EMBED & ROW ---
-function getPanelEmbed() {
+function getPanelEmbed(guild) { 
+    let rankingDescription = 'Ładowanie rankingu...';
+    if (guild) { 
+        const wr = loadWynikRank();
+        let currentMvpId = null;
+        if (MVP_ROLE_ID) { 
+            const mvpRole = guild.roles.cache.get(MVP_ROLE_ID);
+            if (mvpRole) {
+                const mvpMember = guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
+                if (mvpMember) currentMvpId = mvpMember.id;
+            }
+        }
+        rankingDescription = getWynikRanking(true, currentMvpId);
+    }
+
     return new EmbedBuilder()
         .setTitle('Admin Table Stats') 
-        .setDescription('Kliknij przycisk poniżej, aby zobaczyć ranking!'); 
+        .setColor(0xDAA520)
+        .setImage(RANKING_IMG_URL) 
+        .setDescription(rankingDescription); 
 }
+
 function getPanelRow() { 
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('show_wynikirank')
-            .setLabel('Ranking Punktów 🏆')
+            .setLabel('Odśwież Ranking 🏆') 
             .setStyle(ButtonStyle.Primary)
     );
 }
@@ -588,7 +601,7 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // Zadeklarowane globalnie
+const temporaryVoiceChannels = new Map(); 
 
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
@@ -629,7 +642,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
 function getQueueEmbed() {
     const embed = new EmbedBuilder()
         .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
+        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! �')
         .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
@@ -808,6 +821,20 @@ client.once('ready', async () => {
         if (panelCh) {
             let panelMessageId = loadPanelMessageId(); 
             let panelMsg = null;
+            
+            const guild = await client.guilds.fetch(GUILD_ID).catch(e => { 
+                consola.error(`[Panel] Failed to fetch GUILD_ID ${GUILD_ID} for initial panel: ${e.message}`);
+                return null;
+            });
+            
+            const panelContent = { embeds: [getPanelEmbed(guild)] }; 
+            const panelComponentsRow = getPanelRow(); 
+            if (panelComponentsRow && panelComponentsRow.components.length > 0) { 
+                panelContent.components = [panelComponentsRow];
+            } else {
+                panelContent.components = []; 
+            }
+
             if (panelMessageId) {
                 try { 
                     panelMsg = await panelCh.messages.fetch(panelMessageId); 
@@ -816,14 +843,6 @@ client.once('ready', async () => {
                     consola.warn(`[Panel] Failed to fetch existing panel message (ID: ${panelMessageId}), will create a new one. Error: ${err.message}`);
                     panelMessageId = null; 
                 }
-            }
-            
-            const panelContent = { embeds: [getPanelEmbed()] };
-            const panelComponentsRow = getPanelRow(); 
-            if (panelComponentsRow && panelComponentsRow.components.length > 0) { 
-                panelContent.components = [panelComponentsRow];
-            } else {
-                panelContent.components = []; 
             }
 
             if (!panelMsg) { 
@@ -903,8 +922,7 @@ client.once('ready', async () => {
         consola.error(`Nie udało się sprawdzić stanu lobby przy starcie: ${error}`);
     }
 
-    // Zmieniony harmonogram ankiet
-    schedule.scheduleJob('0 12 * * *', async () => { // Start ankiety o 12:00
+    schedule.scheduleJob('0 12 * * *', async () => { 
         try {
             const pollChannelIdToUse = CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID;
             if (!pollChannelIdToUse) {
@@ -942,10 +960,10 @@ client.once('ready', async () => {
         } catch (e) { consola.error('Error scheduling vote start:', e); }
     });
 
-    schedule.scheduleJob('0 18 * * *', async () => { // Koniec ankiety o 18:00
+    schedule.scheduleJob('0 18 * * *', async () => { 
         try {
             if (voteMessage) {
-                const result = await endVoting(voteMessage, votes, true); // true dla forceEnd
+                const result = await endVoting(voteMessage, votes, true); 
                 if (result) {
                     consola.info('Scheduled Poll: Głosowanie zakończone automatycznie o 18:00 i wyniki ogłoszone.');
                     voteMessage = null; 
@@ -1048,17 +1066,17 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async i => {
     try {
-        // Logowanie typu interakcji dla debugowania
-        if (i.isCommand()) consola.debug(`Received command: /${i.commandName}`);
-        if (i.isButton()) consola.debug(`Received button interaction: ${i.customId}`);
-        if (i.isModalSubmit()) consola.debug(`Received modal submit: ${i.customId}`);
-        if (i.isStringSelectMenu()) consola.debug(`Received string select menu: ${i.customId}`);
-        if (i.isUserSelectMenu()) consola.debug(`Received user select menu: ${i.customId}`);
+        if (i.isCommand()) consola.debug(`Received command: /${i.commandName} by ${i.user.tag}`);
+        if (i.isButton()) consola.debug(`Received button interaction: ${i.customId} by ${i.user.tag}`);
+        if (i.isModalSubmit()) consola.debug(`Received modal submit: ${i.customId} by ${i.user.tag}`);
+        if (i.isStringSelectMenu()) consola.debug(`Received string select menu: ${i.customId} by ${i.user.tag} with values ${i.values.join(',')}`);
+        if (i.isUserSelectMenu()) consola.debug(`Received user select menu: ${i.customId} by ${i.user.tag} with values ${i.values.join(',')}`);
 
 
         if (i.isButton()) {
             const panelMsgId = loadPanelMessageId(); 
             if (i.message.id === panelMsgId && i.customId === 'show_wynikirank') { 
+                await i.deferUpdate(); 
                 const wr = loadWynikRank(); 
                 const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
                 let currentMvpId = null;
@@ -1073,10 +1091,9 @@ client.on('interactionCreate', async i => {
                 const embed = new EmbedBuilder()
                     .setTitle('Admin Table Stats') 
                     .setColor(0xDAA520)
-                    .setThumbnail(RANKING_IMG_URL)
                     .setImage(RANKING_IMG_URL) 
                     .setDescription(getWynikRanking(true, currentMvpId)); 
-                return i.update({ embeds: [embed], components: [getPanelRow()] }); 
+                return i.editReply({ embeds: [embed], components: [getPanelRow()] }); 
             }
         }
 
@@ -1388,7 +1405,8 @@ client.on('interactionCreate', async i => {
                 await i.reply({ content: 'Wybierz użytkownika do wyrzucenia z kanału:', components: [row], ephemeral: true });
                 return;
             }
-            // Usunięto obsługę przycisku 'delete' z panelu, więc nie ma potrzeby obsługi 'delete_confirm' i 'delete_cancel' bezpośrednio z panelu
+            // Usunięto obsługę action === 'delete' dla głównego przycisku, ponieważ przycisk został usunięty z panelu.
+            // Obsługa delete_confirm i delete_cancel pozostała na wypadek, gdyby inny mechanizm wywoływał te akcje.
             
             if (!['rename', 'limit', 'permit', 'reject', 'kick'].includes(action) ) { 
                  await i.reply({ content: replyEphemeralContent, ephemeral: true });
@@ -1561,8 +1579,12 @@ client.on('interactionCreate', async i => {
         if (cmd === 'kolejka_start') {
             if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
 
-            const queueChannel = await client.channels.fetch(QUEUE_CHANNEL_ID);
-            if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${QUEUE_CHANNEL_ID}). Sprawdź konfigurację.`, ephemeral: true });
+            const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
+            if(!queueChannelId) {
+                return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
+            }
+            const queueChannel = await client.channels.fetch(queueChannelId);
+            if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
 
             const oldQueueMsgId = loadQueueMessageId();
             if (oldQueueMsgId) {
@@ -1584,7 +1606,7 @@ client.on('interactionCreate', async i => {
             try {
                 queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(adminStatus)] });
                 saveQueueMessageId(queueMessage.id);
-                await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${QUEUE_CHANNEL_ID}>. Lobby jest odblokowane.`, ephemeral: true });
+                await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
             } catch (sendError) {
                 consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
                 await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
@@ -1724,17 +1746,22 @@ client.on('interactionCreate', async i => {
 
         if (cmd === 'ktosus') { 
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
-            await i.guild.members.fetch(); 
-            const realMembers = i.guild.members.cache.filter(member => !member.user.bot);
-            if (realMembers.size === 0) {
-                return i.reply({ content: 'Nie ma kogo wybrać, sami admini i boty! 😉', ephemeral: true });
+            try {
+                await i.guild.members.fetch(); 
+                const realMembers = i.guild.members.cache.filter(member => !member.user.bot);
+                if (realMembers.size === 0) {
+                    return i.reply({ content: 'Nie ma kogo wybrać, sami admini i boty! 😉', ephemeral: true });
+                }
+                const membersArray = Array.from(realMembers.values());
+                const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
+                return i.reply(`Hmm... 🤔 Coś mi tu nie gra... <@${randomMember.id}> wygląda dzisiaj wyjątkowo podejrzanie... 👀`);
+            } catch (err) {
+                consola.error("Error fetching members for /ktosus:", err);
+                return i.reply({ content: 'Nie udało się pobrać listy użytkowników, spróbuj ponownie.', ephemeral: true});
             }
-            const membersArray = Array.from(realMembers.values());
-            const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
-            return i.reply(`Hmm... 🤔 Coś mi tu nie gra... <@${randomMember.id}> wygląda dzisiaj wyjątkowo podejrzanie... 👀`);
         }
 
-        const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'ktosus'];
+        const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'ktosus', 'ankieta'];
         if (!knownCommands.includes(cmd)){ 
             consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
             await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
@@ -1743,7 +1770,7 @@ client.on('interactionCreate', async i => {
 
     } catch (e) {
         const interactionDetails = i.isCommand() ? i.commandName : (i.isButton() || i.isModalSubmit() || i.isAnySelectMenu() ? i.customId : 'unknown interaction');
-        consola.error(`Error during interaction '${interactionDetails}' by ${i.user.tag} in guild ${i.guildId || 'DM'}:`, e);
+        consola.error(`Error during interaction '${interactionDetails}' by ${i.user.tag} in guild ${i.guild?.id || 'DM'}:`, e);
         try {
             const owner = await client.users.fetch(OWNER_ID).catch(() => null);
             if(owner) {
@@ -1842,12 +1869,20 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     
     // Wysyłanie DM po dołączeniu do WELCOME_DM_VC_ID
     if (WELCOME_DM_VC_ID && newState.channelId === WELCOME_DM_VC_ID && oldState.channelId !== WELCOME_DM_VC_ID) {
-        consola.info(`User ${member.user.tag} joined WELCOME_DM_VC_ID (${WELCOME_DM_VC_ID}). Attempting to send DM.`);
-        try {
-            await member.send("test, pacia uzupełni");
-            consola.info(`Sent welcome DM to ${member.user.tag}`);
-        } catch (dmError) {
-            consola.warn(`Could not send welcome DM to ${member.user.tag}. They might have DMs disabled. Error: ${dmError.message}`);
+        consola.info(`User ${member.user.tag} joined WELCOME_DM_VC_ID (${WELCOME_DM_VC_ID}).`);
+        const welcomeDmSentUsers = loadJSON(WELCOME_DM_SENT_USERS_FILE, {});
+        if (!welcomeDmSentUsers[member.id]) {
+            consola.info(`Attempting to send welcome DM to ${member.user.tag} (first time join).`);
+            try {
+                await member.send("test, pacia uzupełni");
+                consola.info(`Sent welcome DM to ${member.user.tag}`);
+                welcomeDmSentUsers[member.id] = true;
+                saveJSON(WELCOME_DM_SENT_USERS_FILE, welcomeDmSentUsers);
+            } catch (dmError) {
+                consola.warn(`Could not send welcome DM to ${member.user.tag}. They might have DMs disabled. Error: ${dmError.message}`);
+            }
+        } else {
+            consola.info(`User ${member.user.tag} has already received the welcome DM for this channel.`);
         }
     }
 
@@ -1944,7 +1979,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
         } catch (error) {
             consola.error(`Failed to create or manage temporary voice channel for ${member.user.tag}:`, error);
-            // Informowanie użytkownika o błędzie
              try {
                 await member.send("Przepraszamy, wystąpił błąd podczas tworzenia Twojego kanału tymczasowego. Spróbuj ponownie później lub skontaktuj się z administratorem.").catch(() => {});
             } catch (e) { consola.warn("Failed to send DM about temp channel creation error after initial error.");}
@@ -1980,7 +2014,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 
 
-    // --- Logika ochrony lobby gry ---
     if (GAME_LOBBY_VOICE_CHANNEL_ID && WAITING_ROOM_VOICE_CHANNEL_ID && gameLobbyChannel && waitingRoomChannel) {
         const lobbyMemberCount = gameLobbyChannel.members.filter(m => !m.user.bot).size;
         const previousLobbyLockedStatus = isLobbyLocked;
@@ -2039,3 +2072,4 @@ function attemptLogin(retries = 5) {
     });
 }
 attemptLogin();
+
