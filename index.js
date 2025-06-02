@@ -1949,7 +1949,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             creatorNameForChannel = creatorNameForChannel.replace(/[^a-z0-9-]/g, ''); // Remove special chars
             if (creatorNameForChannel.length > 25) creatorNameForChannel = creatorNameForChannel.substring(0, 25); // Limit length
             if (creatorNameForChannel.length === 0) creatorNameForChannel = 'uzytkownika'; // Fallback
-            const controlTextChannelName = `czat-${creatorNameForChannel}`; // Prefix with "czat-"
+            const controlTextChannelName = `Panel-${creatorNameForChannel}`; // Prefix with "Panel-"
 
             const controlTextChannel = await guild.channels.create({
                 name: controlTextChannelName,
