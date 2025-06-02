@@ -102,7 +102,8 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg';
-const RANKING_IMG_URL = 'https://i.imgur.com/rF0YAFC.png';
+const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png'; // Zaktualizowany URL dla rankingu tygodniowego MVP
+
 
 const RANK_FILE = path.join(DATA_DIR, 'rank.json');
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
@@ -397,7 +398,7 @@ function getPanelEmbed(guild) {
     return new EmbedBuilder()
         .setTitle('Admin Table Stats')
         .setColor(0xDAA520)
-        .setImage(RANKING_IMG_URL)
+        // .setImage(RANKING_IMG_URL) // Usunięto obrazek z normalnego panelu rankingu
         .setDescription(rankingDescription);
 }
 
@@ -1036,7 +1037,6 @@ client.once('ready', async () => {
                 mvpOfTheWeekId = null;
             }
 
-            // Zmieniona logika wyboru kanału docelowego dla cotygodniowego rankingu MVP
             const weeklyMvpTargetChannelId = WEEKLY_MVP_CHANNEL_ID || PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID;
             if (!weeklyMvpTargetChannelId) {
                 consola.error("Weekly MVP Ranking: No target channel configured (WEEKLY_MVP_CHANNEL_ID or PANEL_CHANNEL_ID).");
@@ -1063,8 +1063,7 @@ client.once('ready', async () => {
                     .setTitle('🔪MVP AMONG TYGODNIA🔪')
                     .setDescription(rankingDescription + mvpAnnouncement)
                     .setColor(0xDAA520)
-                    .setThumbnail(RANKING_IMG_URL)
-                    .setImage(RANKING_IMG_URL)
+                    .setImage(MVP_WEEKLY_RANKING_IMG_URL) 
                     .setFooter({ text: "Gratulacje!!" });
                 await targetChannel.send({ embeds: [embed] });
                 consola.info(`[Weekly MVP] Sent weekly MVP announcement to channel ${targetChannel.name} (ID: ${targetChannel.id})`);
@@ -1102,7 +1101,7 @@ client.on('interactionCreate', async i => {
                 const embed = new EmbedBuilder()
                     .setTitle('Admin Table Stats')
                     .setColor(0xDAA520)
-                    .setImage(RANKING_IMG_URL)
+                    // .setImage(RANKING_IMG_URL) // Usunięto obrazek
                     .setDescription(getWynikRanking(true, currentMvpId)); // Pass MVP ID
                 return i.editReply({ embeds: [embed], components: [getPanelRow()] });
             }
@@ -1990,7 +1989,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             });
 
             // Usunięto wysyłanie DM po utworzeniu kanału
-            // await member.send(`Twój prywatny kanał głosowy **${vcName}** (<#${newVc.id}>) został utworzony! Jest domyślnie **odblokowany**. Możesz nim zarządzać na kanale <#${controlTextChannel.id}>.`).catch(dmErr => consola.warn(`Nie udało się wysłać DM o utworzeniu kanału do ${member.user.tag}: ${dmErr.message}`));
+            // consola.info(`DM about temporary channel creation for ${member.user.tag} would have been sent here.`);
 
         } catch (error) {
             consola.error(`Failed to create or manage temporary voice channel for ${member.user.tag}:`, error);
