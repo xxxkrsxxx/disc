@@ -355,7 +355,6 @@ async function registerCommands() {
             )
             .toJSON()
     );
-    // Nowa komenda /dodajpunkty
     cmds.push(
         new SlashCommandBuilder()
             .setName('dodajpunkty')
@@ -369,7 +368,7 @@ async function registerCommands() {
                 option.setName('liczba_punktow')
                 .setDescription('Liczba punktów do dodania.')
                 .setRequired(true)
-                .setMinValue(1) // Można ustawić, aby można było dodawać też 0 lub ujemne, jeśli potrzebne
+                .setMinValue(1)
             )
             .addStringOption(option =>
                 option.setName('powod')
@@ -429,7 +428,7 @@ function getPanelRow() {
 }
 
 // --- ANKIETA ---
-const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n🔔Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n      Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
+const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n�Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n      Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
 
 function determineWinnerDescriptionForMainEmbed(votesCollection) {
     const counts = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
@@ -769,7 +768,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 
     const embed = new EmbedBuilder()
         .setTitle(`⚙️ Panel Zarządzania Kanałem: ${vcName}`)
-        .setDescription(`Status: ${isLocked ? '🔒 Zablokowany' : '� Otwarty'}\nLimit miejsc: ${currentLimit === 0 ? 'Brak' : currentLimit}`)
+        .setDescription(`Status: ${isLocked ? '🔒 Zablokowany' : '🔓 Otwarty'}\nLimit miejsc: ${currentLimit === 0 ? 'Brak' : currentLimit}`)
         .setColor('#3498DB')
         .setFooter({text: `Kanał głosowy: ${vcName} (ID: ${vcId})`});
 
@@ -1263,9 +1262,11 @@ client.on('interactionCreate', async i => {
 
             const rowSelect = new ActionRowBuilder().addComponents(userSelect);
 
-            let roleNameDisplay = "Crewmate (+1 pkt)";
-            if (roleType === 'neutral') roleNameDisplay = "Neutral (+3 pkt)";
-            else if (roleType === 'impostor') roleNameDisplay = "Impostor (+2 pkt)";
+            // Zaktualizowane etykiety przycisków
+            let roleNameDisplay = "Crewmate (+100 pkt)";
+            if (roleType === 'neutral') roleNameDisplay = "Neutral (+300 pkt)";
+            else if (roleType === 'impostor') roleNameDisplay = "Impostor (+200 pkt)";
+
 
             await i.editReply({
                 content: `Wybrano: **${roleNameDisplay}**. Teraz wybierz graczy, którzy ją pełnili:`,
@@ -1298,14 +1299,15 @@ client.on('interactionCreate', async i => {
                 let points = 0;
                 let roleNameDisplay = "Nieznana Rola";
 
+                // Zaktualizowana punktacja
                 if (roleType === 'neutral') {
-                    points = 3;
+                    points = 300;
                     roleNameDisplay = "Neutral";
                 } else if (roleType === 'impostor') {
-                    points = 2;
+                    points = 200;
                     roleNameDisplay = "Impostor";
                 } else if (roleType === 'crewmate') {
-                    points = 1;
+                    points = 100;
                     roleNameDisplay = "Crewmate";
                     crewmateWinIncrement++;
                 }
@@ -1319,8 +1321,8 @@ client.on('interactionCreate', async i => {
                 summaryLines.push(`\n📈 Wygrane Crewmate w tej rundzie: ${crewmateWinIncrement}`);
             }
 
-
-            let finalSummary = `🏆 **Podsumowanie Punktacji (${roleType === 'neutral' ? 'Neutral' : roleType === 'impostor' ? 'Impostor' : 'Crewmate'}):**\n` + summaryLines.join('\n');
+            // Zaktualizowane podsumowanie
+            let finalSummary = `🏆 **Podsumowanie Punktacji (${roleType === 'neutral' ? 'Neutral (+300)' : roleType === 'impostor' ? 'Impostor (+200)' : 'Crewmate (+100)'}):**\n` + summaryLines.join('\n');
             if (summaryLines.length === 0) {
                 finalSummary = "Nie wybrano żadnych graczy lub wystąpiły błędy.";
             }
@@ -1620,9 +1622,9 @@ client.on('interactionCreate', async i => {
                 .setColor(0x2ECC71);
             const roleButtons = new ActionRowBuilder()
                 .addComponents(
-                    new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+3 pkt)').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+2 pkt)').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+1 pkt)').setStyle(ButtonStyle.Success)
+                    new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+300 pkt)').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+200 pkt)').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+100 pkt)').setStyle(ButtonStyle.Success)
                 );
             await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
             return;
@@ -1785,14 +1787,13 @@ client.on('interactionCreate', async i => {
             consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
             return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
         }
-        // Obsługa nowej komendy /dodajpunkty
         if (cmd === 'dodajpunkty') {
             if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
             const targetUser = i.options.getUser('uzytkownik');
             const pointsToAdd = i.options.getInteger('liczba_punktow');
-            const reason = i.options.getString('powod') || 'Brak określonego powodu'; // Domyślny powód
+            const reason = i.options.getString('powod') || 'Brak określonego powodu';
 
             if (pointsToAdd <= 0) {
                 return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
