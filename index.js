@@ -38,7 +38,7 @@ const {
     ROLE_ID,      // Rola pingowana przy ankietach
     GUILD_ID,     // Kluczowe dla działania na jednym serwerze
     LEADER_ROLE_ID,
-    LOBBY_MASTER_ROLE_ID, // Nowa rola dla Mistrza Lobby
+    LOBBY_MASTER_ROLE_ID,
     PANEL_CHANNEL_ID,
     QUEUE_CHANNEL_ID,
     GAME_LOBBY_VOICE_CHANNEL_ID,
@@ -77,7 +77,7 @@ checkEnvVar('ROLE_ID', ROLE_ID, 'Poll pings');
 checkEnvVar('LOBBY_MASTER_ROLE_ID', LOBBY_MASTER_ROLE_ID, 'Lobby Master role (for queue management)');
 checkEnvVar('PANEL_CHANNEL_ID', PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID, 'Ranking panel display');
 checkEnvVar('QUEUE_CHANNEL_ID', QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID, 'Queue system');
-checkEnvVar('GAME_LOBBY_VOICE_CHANNEL_ID', GAME_LOBBY_VOICE_CHANNEL_ID, 'Lobby protection');
+checkEnvVar('GAME_LOBBY_VOICE_CHANNEL_ID', GAME_LOBBY_VOICE_CHANNEL_ID, 'Lobby protection & /ktosus command');
 checkEnvVar('WAITING_ROOM_VOICE_CHANNEL_ID', WAITING_ROOM_VOICE_CHANNEL_ID, 'Lobby protection redirect');
 checkEnvVar('VOICE_CREATOR_CHANNEL_ID', VOICE_CREATOR_CHANNEL_ID, 'Temporary voice channel creation');
 checkEnvVar('TEMP_CHANNEL_CATEGORY_ID', TEMP_CHANNEL_CATEGORY_ID, 'Temporary voice channel categorization');
@@ -91,6 +91,7 @@ checkEnvVar('WEEKLY_MVP_CHANNEL_ID', WEEKLY_MVP_CHANNEL_ID, 'Weekly MVP Announce
 
 // --- DATA DIRECTORY SETUP ---
 const DATA_DIR = process.env.RENDER_DISK_MOUNT_PATH || path.join(__dirname, 'bot_data');
+console.log(`[INIT] Data directory is set to: ${DATA_DIR}`);
 
 if (!fs.existsSync(DATA_DIR)){
     try {
@@ -113,6 +114,7 @@ const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
 const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json');
 const WELCOME_DM_SENT_USERS_FILE = path.join(DATA_DIR, 'welcomeDmSentUsers.json');
+const KTOSUS_COOLDOWNS_FILE = path.join(DATA_DIR, 'ktosusCooldowns.json');
 
 function loadJSON(filePath, defaultValue = {}) {
     if (!fs.existsSync(filePath)) {
@@ -178,22 +180,24 @@ function updateWynikRank(userId, pts) {
     consola.info(`[Points System] Updated score for ${userId} by ${pts}. New score: ${wr[userId]}`);
 }
 
-function getWynikRanking(includeMvpMention = false, mvpUserId = null) {
+function getWynikRanking(includeMvpMention = false, mvpUserId = null, showAll = false) {
     const wr = loadWynikRank();
+    let sortedEntries = Object.entries(wr)
+        .sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
 
-    const sortedDisplay = Object.entries(wr)
-        .sort(([, aPoints], [, bPoints]) => bPoints - aPoints)
-        .slice(0, 10)
-        .map(([userId, points], i) => {
+    if (!showAll) {
+        sortedEntries = sortedEntries.slice(0, 10);
+    }
+
+    const sortedDisplay = sortedEntries.map(([userId, points], i) => {
             let mvpMarker = '';
-            if (includeMvpMention && userId === mvpUserId) {
+            if (includeMvpMention && userId === mvpUserId && !showAll) {
                 mvpMarker = ' 👑 **MVP Tygodnia!**';
             }
             return `${i + 1}. <@${userId}> – ${points} pkt${mvpMarker}`;
         });
 
     const rankingText = sortedDisplay.length ? sortedDisplay.join('\n') : 'Brak danych do wyświetlenia.\nZacznijcie grać i zdobywać punkty!';
-
     return rankingText;
 }
 
@@ -260,6 +264,7 @@ const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzO
 const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif';
 const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif';
 
+const KTOSUS_COOLDOWN_DURATION = 24 * 60 * 60 * 1000; // 24 godziny w milisekundach
 
 async function registerCommands() {
     const cmds = [];
@@ -267,132 +272,104 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
+
+    // Grupa komend /ankieta
     cmds.push(
-        new SlashCommandBuilder()
-            .setName('zakoncz')
-            .setDescription('Zakończ aktualnie trwające głosowanie (admin)')
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('ankieta_test_start')
-            .setDescription('TEST: Ręcznie uruchamia ankietę (admin).')
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('kolejka_start')
-            .setDescription('Rozpoczyna i wyświetla panel kolejki (admin/mistrz lobby)')
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('dodaj')
-            .setDescription('Dodaje gracza na koniec kolejki (admin/mistrz lobby).')
-            .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do dodania.').setRequired(true))
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('pozycja')
-            .setDescription('Ustawia gracza na konkretnej pozycji w kolejce (admin/mistrz lobby).')
-            .addIntegerOption(option =>
-                option.setName('wartosc')
-                .setDescription('Numer pozycji w kolejce (zaczynając od 1).')
-                .setRequired(true)
-                .setMinValue(1)
+        new SlashCommandBuilder().setName('ankieta').setDescription('Zarządzanie ankietami.')
+            .addSubcommand(subcommand =>
+                subcommand.setName('start')
+                .setDescription('TEST: Ręcznie uruchamia ankietę (admin).')
             )
-            .addUserOption(option =>
-                option.setName('uzytkownik')
-                .setDescription('Gracz, którego pozycję chcesz ustawić.')
-                .setRequired(true)
+            .addSubcommand(subcommand =>
+                subcommand.setName('zakoncz')
+                .setDescription('Zakończ aktualnie trwające głosowanie (admin).')
             )
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('kolejka_nastepny')
-            .setDescription('Pobiera następną osobę z kolejki (admin/mistrz lobby) i próbuje przenieść do lobby.')
-            .addIntegerOption(option =>
-                option.setName('liczba')
-                    .setDescription('Liczba osób do pobrania (domyślnie 1)')
-                    .setRequired(false)
-            )
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('kolejka_wyczysc')
-            .setDescription('Czyści całą kolejkę (admin/mistrz lobby)')
             .toJSON()
     );
 
-    const winCommand = new SlashCommandBuilder()
-        .setName('win')
-        .setDescription('Rozpocznij proces przyznawania punktów za role (admin).');
-    cmds.push(winCommand.toJSON());
+    // Grupa komend /kolejka
+    cmds.push(
+        new SlashCommandBuilder().setName('kolejka').setDescription('Zarządzanie kolejką do gry.')
+            .addSubcommand(subcommand =>
+                subcommand.setName('start')
+                .setDescription('Rozpoczyna/resetuje panel kolejki (admin/mistrz lobby).')
+            )
+            .addSubcommand(subcommand =>
+                subcommand.setName('dodaj')
+                .setDescription('Dodaje gracza na koniec kolejki (admin/mistrz lobby).')
+                .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do dodania.').setRequired(true))
+            )
+            .addSubcommand(subcommand =>
+                subcommand.setName('pozycja')
+                .setDescription('Ustawia gracza na konkretnej pozycji w kolejce (admin/mistrz lobby).')
+                .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz, którego pozycję chcesz ustawić.').setRequired(true))
+                .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
+            )
+            .addSubcommand(subcommand =>
+                subcommand.setName('pociagnij')
+                .setDescription('Pobiera graczy z kolejki i próbuje przenieść do lobby (admin/mistrz lobby).')
+                .addIntegerOption(option => option.setName('liczba').setDescription('Liczba osób do pobrania (domyślnie 1).').setRequired(false).setMinValue(1))
+            )
+            .addSubcommand(subcommand =>
+                subcommand.setName('wyczysc')
+                .setDescription('Czyści całą kolejkę (admin/mistrz lobby).')
+            )
+            .toJSON()
+    );
 
+    // Grupa komend /ranking
     cmds.push(
-        new SlashCommandBuilder()
-            .setName('wyczysc_ranking_punktow')
-            .setDescription('Czyści cały ranking punktów (admin).')
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('usun_punkty')
-            .setDescription('Odejmuje punkty danemu użytkownikowi (admin).')
-            .addUserOption(option =>
-                option.setName('uzytkownik')
-                .setDescription('Użytkownik, któremu chcesz odjąć punkty.')
-                .setRequired(true)
+        new SlashCommandBuilder().setName('ranking').setDescription('Zarządzanie rankingiem punktów.')
+            .addSubcommand(subcommand =>
+                subcommand.setName('dodaj')
+                .setDescription('Ręcznie dodaje punkty użytkownikowi (admin).')
+                .addUserOption(option => option.setName('uzytkownik').setDescription('Użytkownik, któremu dodać punkty.').setRequired(true))
+                .addIntegerOption(option => option.setName('liczba_punktow').setDescription('Liczba punktów do dodania.').setRequired(true).setMinValue(1))
+                .addStringOption(option => option.setName('powod').setDescription('Opcjonalny powód przyznania punktów.').setRequired(false))
             )
-            .addIntegerOption(option =>
-                option.setName('liczba_punktow')
-                .setDescription('Liczba punktów do odjęcia.')
-                .setRequired(true)
-                .setMinValue(1)
+            .addSubcommand(subcommand =>
+                subcommand.setName('usun')
+                .setDescription('Odejmuje punkty danemu użytkownikowi (admin).')
+                .addUserOption(option => option.setName('uzytkownik').setDescription('Użytkownik, któremu odjąć punkty.').setRequired(true))
+                .addIntegerOption(option => option.setName('liczba_punktow').setDescription('Liczba punktów do odjęcia.').setRequired(true).setMinValue(1))
             )
-            .toJSON()
-    );
-    cmds.push(
-        new SlashCommandBuilder()
-            .setName('dodajpunkty')
-            .setDescription('Ręcznie dodaje punkty użytkownikowi (admin).')
-            .addUserOption(option =>
-                option.setName('uzytkownik')
-                .setDescription('Użytkownik, któremu chcesz dodać punkty.')
-                .setRequired(true)
+            .addSubcommand(subcommand =>
+                subcommand.setName('clear') // Zmieniono z 'wyczysc' na 'clear'
+                .setDescription('Czyści cały ranking punktów (admin).')
             )
-            .addIntegerOption(option =>
-                option.setName('liczba_punktow')
-                .setDescription('Liczba punktów do dodania.')
-                .setRequired(true)
-                .setMinValue(1)
-            )
-            .addStringOption(option =>
-                option.setName('powod')
-                .setDescription('Opcjonalny powód przyznania punktów.')
-                .setRequired(false)
+            .addSubcommand(subcommand =>
+                subcommand.setName('among') // Zmieniono z 'pokaz_wszystko' na 'among'
+                .setDescription('Wyświetla pełny ranking wszystkich graczy.')
             )
             .toJSON()
     );
+
+    // Komenda /win
+    cmds.push(
+        new SlashCommandBuilder()
+            .setName('win')
+            .setDescription('Rozpocznij proces przyznawania punktów za role po grze (admin).')
+            .toJSON()
+    );
+
+    // Komenda /ktosus
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera najbardziej podejrzaną osobę na serwerze!')
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (cooldown 24h).')
             .toJSON()
     );
 
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     try {
+        consola.info(`[Commands] Registering ${cmds.length} application (/) commands.`);
         await rest.put(
             Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
             { body: cmds }
         );
-        consola.success(`✅ Registered ${cmds.length} commands in guild ${GUILD_ID}`);
+        consola.success(`✅ Successfully registered ${cmds.length} application (/) commands in guild ${GUILD_ID}`);
     } catch (error) {
-        consola.error(`❌ Failed to register commands in guild ${GUILD_ID}:`, error);
+        consola.error(`❌ Failed to register application (/) commands in guild ${GUILD_ID}:`, error);
     }
 }
 
@@ -409,7 +386,7 @@ function getPanelEmbed(guild) {
                 if (mvpMember) currentMvpId = mvpMember.id;
             }
         }
-        rankingDescription = getWynikRanking(true, currentMvpId);
+        rankingDescription = getWynikRanking(true, currentMvpId, false);
     }
 
     return new EmbedBuilder()
@@ -428,7 +405,7 @@ function getPanelRow() {
 }
 
 // --- ANKIETA ---
-const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n�Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n      Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
+const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n🔔Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n      Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
 
 function determineWinnerDescriptionForMainEmbed(votesCollection) {
     const counts = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
@@ -546,7 +523,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! �🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
@@ -621,7 +598,6 @@ let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
 
-// Funkcja sprawdzająca ogólne uprawnienia administracyjne bota (Owner lub Leader)
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
     if (userId === OWNER_ID) return true;
@@ -633,11 +609,10 @@ function isUserAdmin(interactionOrUser, guild) {
     return member && member.roles.cache.has(LEADER_ROLE_ID);
 }
 
-// Nowa funkcja sprawdzająca uprawnienia do zarządzania kolejką (Owner, Leader LUB Mistrz Lobby)
 function isUserQueueManager(interactionOrUser, guild) {
-    if (isUserAdmin(interactionOrUser, guild)) return true; // Admini mają dostęp do wszystkiego
+    if (isUserAdmin(interactionOrUser, guild)) return true;
 
-    if (!LOBBY_MASTER_ROLE_ID) return false; // Jeśli rola Mistrza Lobby nie jest skonfigurowana
+    if (!LOBBY_MASTER_ROLE_ID) return false;
 
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
     if (!guild) {
@@ -650,7 +625,7 @@ function isUserQueueManager(interactionOrUser, guild) {
 
 
 async function attemptMovePlayerToLobby(interaction, userId, guild) {
-    let moveStatusMessage = ''; // Initialize status message
+    let moveStatusMessage = '';
     try {
         const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) {
@@ -658,7 +633,6 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        // Wyślij DM do użytkownika, który jest wyciągany z kolejki
         const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
@@ -860,21 +834,7 @@ async function manualStartPoll(interaction) {
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
-    // TYMCZASOWY KOD DO CZYSZCZENIA GLOBALNYCH KOMEND - URUCHOMIĆ RAZ I USUNĄĆ/ZAKOMENTOWAĆ
-    // const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-    // try {
-    //     consola.info('Attempting to delete all global commands.');
-    //     await rest.put(
-    //         Routes.applicationCommands(CLIENT_ID), // Endpoint dla komend globalnych
-    //         { body: [] } // Pusta tablica usuwa wszystkie komendy
-    //     );
-    //     consola.success('✅ Successfully deleted all global commands.');
-    // } catch (error) {
-    //     consola.error('❌ Failed to delete global commands:', error);
-    // }
-    // KONIEC TYMCZASOWEGO KODU
-
-    await registerCommands(); // Rejestruje komendy tylko dla GUILD_ID
+    await registerCommands();
 
     const panelChannelIdToUse = PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID;
     if (panelChannelIdToUse) {
@@ -1105,7 +1065,7 @@ client.once('ready', async () => {
             });
 
             if (targetChannel) {
-                const rankingDescription = getWynikRanking(true, mvpOfTheWeekId);
+                const rankingDescription = getWynikRanking(true, mvpOfTheWeekId, false);
 
                 let mvpAnnouncement = "";
                 if (mvpOfTheWeekId) {
@@ -1133,7 +1093,7 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async i => {
     try {
-        if (i.isCommand()) consola.debug(`Received command: /${i.commandName} by ${i.user.tag}`);
+        if (i.isCommand()) consola.debug(`Received command: /${i.commandName}${i.options.getSubcommand(false) ? ' ' + i.options.getSubcommand(false) : ''} by ${i.user.tag}`);
         if (i.isButton()) consola.debug(`Received button interaction: ${i.customId} by ${i.user.tag}`);
         if (i.isModalSubmit()) consola.debug(`Received modal submit: ${i.customId} by ${i.user.tag}`);
         if (i.isStringSelectMenu()) consola.debug(`Received string select menu: ${i.customId} by ${i.user.tag} with values ${i.values.join(',')}`);
@@ -1247,7 +1207,7 @@ client.on('interactionCreate', async i => {
 
 
         if (i.isButton() && i.customId.startsWith('points_role_')) {
-            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
+            if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
             }
             await i.deferUpdate();
@@ -1262,7 +1222,6 @@ client.on('interactionCreate', async i => {
 
             const rowSelect = new ActionRowBuilder().addComponents(userSelect);
 
-            // Zaktualizowane etykiety przycisków
             let roleNameDisplay = "Crewmate (+100 pkt)";
             if (roleType === 'neutral') roleNameDisplay = "Neutral (+300 pkt)";
             else if (roleType === 'impostor') roleNameDisplay = "Impostor (+200 pkt)";
@@ -1278,7 +1237,7 @@ client.on('interactionCreate', async i => {
         }
 
         if (i.isUserSelectMenu() && i.customId.startsWith('points_user_select_')) {
-            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
+            if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
             }
             await i.deferUpdate();
@@ -1299,7 +1258,6 @@ client.on('interactionCreate', async i => {
                 let points = 0;
                 let roleNameDisplay = "Nieznana Rola";
 
-                // Zaktualizowana punktacja
                 if (roleType === 'neutral') {
                     points = 300;
                     roleNameDisplay = "Neutral";
@@ -1321,7 +1279,6 @@ client.on('interactionCreate', async i => {
                 summaryLines.push(`\n📈 Wygrane Crewmate w tej rundzie: ${crewmateWinIncrement}`);
             }
 
-            // Zaktualizowane podsumowanie
             let finalSummary = `🏆 **Podsumowanie Punktacji (${roleType === 'neutral' ? 'Neutral (+300)' : roleType === 'impostor' ? 'Impostor (+200)' : 'Crewmate (+100)'}):**\n` + summaryLines.join('\n');
             if (summaryLines.length === 0) {
                 finalSummary = "Nie wybrano żadnych graczy lub wystąpiły błędy.";
@@ -1335,11 +1292,11 @@ client.on('interactionCreate', async i => {
 
         if (i.isButton() && i.customId.startsWith('queue_')) {
             if (i.customId === 'queue_pull_next') {
-                if (!isUserQueueManager(i, i.guild)) { // Użycie nowej funkcji
+                if (!isUserQueueManager(i, i.guild)) {
                     return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
                 }
                 if (!queueMessage) {
-                    return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka_start`.', ephemeral: true });
+                    return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 }
 
                 if (currentQueue.length > 0) {
@@ -1359,7 +1316,7 @@ client.on('interactionCreate', async i => {
 
                 if (i.customId === 'queue_join') {
                     if (!queueMessage) {
-                        await i.followUp({ content: 'Panel kolejki nie jest obecnie aktywny. Poproś administratora o użycie `/kolejka_start`.', ephemeral: true });
+                        await i.followUp({ content: 'Panel kolejki nie jest obecnie aktywny. Poproś administratora o użycie `/kolejka start`.', ephemeral: true });
                         return;
                     }
                     if (!currentQueue.includes(userId)) {
@@ -1604,15 +1561,152 @@ client.on('interactionCreate', async i => {
 
 
         if (!i.isChatInputCommand()) return;
-        const cmd = i.commandName;
-        consola.info(`Command: /${cmd} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
+        const commandName = i.commandName;
+        const subcommandName = i.options.getSubcommand(false); // false, aby nie rzucało błędu, jeśli nie ma subkomendy
 
-        if (cmd === 'ankieta_test_start') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            return manualStartPoll(i);
-        }
+        consola.info(`Command: /${commandName}${subcommandName ? ' ' + subcommandName : ''} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
 
-        if (cmd === 'win') {
+        if (commandName === 'ankieta') {
+            if (subcommandName === 'start') {
+                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+                return manualStartPoll(i);
+            } else if (subcommandName === 'zakoncz') {
+                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień.', ephemeral: true });
+                if (!voteMessage) return i.reply({ content: '❌ Brak aktywnej ankiety do zakończenia.', ephemeral: true });
+                await i.deferReply({ ephemeral: true });
+                const res = await endVoting(voteMessage, votes, true);
+                if (res) {
+                    voteMessage = null;
+                    return i.editReply('✅ Ankieta zakończona.');
+                }
+                return i.editReply('❌ Nie udało się zakończyć ankiety.');
+            }
+        } else if (commandName === 'kolejka') {
+            if (!isUserQueueManager(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do zarządzania kolejką.', ephemeral: true });
+            }
+            if (subcommandName === 'start') {
+                const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
+                if(!queueChannelId) {
+                    return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
+                }
+                const queueChannel = await client.channels.fetch(queueChannelId);
+                if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
+
+                const oldQueueMsgId = loadQueueMessageId();
+                if (oldQueueMsgId) {
+                    try {
+                        const oldMsg = await queueChannel.messages.fetch(oldQueueMsgId);
+                        await oldMsg.delete();
+                        consola.info(`Usunięto starą wiadomość kolejki (ID: ${oldQueueMsgId})`);
+                    } catch (err) {
+                        consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
+                    }
+                }
+                saveQueueMessageId('');
+                queueMessage = null;
+                currentQueue = [];
+                isLobbyLocked = false;
+                lastPulledUserIds = [];
+                const canManageQueue = isUserQueueManager(i, i.guild);
+                try {
+                    queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
+                    saveQueueMessageId(queueMessage.id);
+                    await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
+                } catch (sendError) {
+                    consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
+                    await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
+                }
+            } else if (subcommandName === 'dodaj') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const userToAdd = i.options.getUser('uzytkownik');
+                if (currentQueue.includes(userToAdd.id)) return i.reply({ content: `<@${userToAdd.id}> jest już w kolejce.`, ephemeral: true });
+                currentQueue.push(userToAdd.id);
+                await updateQueueMessage(i);
+                return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
+            } else if (subcommandName === 'pozycja') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const userToPosition = i.options.getUser('uzytkownik');
+                const desiredPosition = i.options.getInteger('wartosc');
+                if (desiredPosition <= 0) return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
+                const existingIndex = currentQueue.indexOf(userToPosition.id);
+                if (existingIndex > -1) currentQueue.splice(existingIndex, 1);
+                const targetIndex = desiredPosition - 1;
+                if (targetIndex >= currentQueue.length) {
+                    currentQueue.push(userToPosition.id);
+                    await updateQueueMessage(i);
+                    return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
+                } else {
+                    currentQueue.splice(targetIndex, 0, userToPosition.id);
+                    await updateQueueMessage(i);
+                    return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
+                }
+            } else if (subcommandName === 'pociagnij') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
+                const liczba = i.options.getInteger('liczba') || 1;
+                if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
+                await i.deferReply({ ephemeral: true });
+                const pulledUsersInfo = [];
+                let overallMoveStatusMessage = "\n**Status przenoszenia:**\n";
+                const currentPulledIdsThisCommand = [];
+                for (let k = 0; k < liczba && currentQueue.length > 0; k++) {
+                    const userId = currentQueue.shift();
+                    pulledUsersInfo.push(`<@${userId}>`);
+                    currentPulledIdsThisCommand.push(userId);
+                    const moveStatus = await attemptMovePlayerToLobby(i, userId, i.guild);
+                    overallMoveStatusMessage += `${moveStatus.startsWith('Gracz') ? '' : `<@${userId}>: `}${moveStatus}\n`;
+                }
+                lastPulledUserIds = [...currentPulledIdsThisCommand];
+                await updateQueueMessage(i);
+                const pulledMentions = pulledUsersInfo.join(', ');
+                await i.editReply({ content: `🎣 Następujące osoby zostały wyciągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
+            } else if (subcommandName === 'wyczysc') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
+                currentQueue = [];
+                lastPulledUserIds = [];
+                await updateQueueMessage(i);
+                return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
+            }
+        } else if (commandName === 'ranking') {
+            if (!isUserAdmin(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            }
+            if (subcommandName === 'dodaj') {
+                const targetUser = i.options.getUser('uzytkownik');
+                const pointsToAdd = i.options.getInteger('liczba_punktow');
+                const reason = i.options.getString('powod') || 'Brak określonego powodu';
+                if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
+                updateWynikRank(targetUser.id, pointsToAdd);
+                const currentPoints = loadWynikRank();
+                const userNewPoints = currentPoints[targetUser.id] || 0;
+                consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
+                return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
+            } else if (subcommandName === 'usun') {
+                const userToRemovePoints = i.options.getUser('uzytkownik');
+                const pointsToRemove = i.options.getInteger('liczba_punktow');
+                if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
+                const currentPointsData = loadWynikRank();
+                const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
+                if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
+                const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
+                currentPointsData[userToRemovePoints.id] = newPoints;
+                saveWynikRank(currentPointsData);
+                consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
+                return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
+            } else if (subcommandName === 'clear') { // Zmieniono na 'clear'
+                saveWynikRank({});
+                consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
+                await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
+            } else if (subcommandName === 'among') { // Zmieniono na 'among'
+                const fullRankingText = getWynikRanking(false, null, true);
+                const embed = new EmbedBuilder()
+                    .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
+                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
+                    .setColor(0xDAA520)
+                    .setTimestamp();
+                await i.reply({ embeds: [embed], ephemeral: true });
+            }
+        } else if (commandName === 'win') {
             if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
@@ -1627,211 +1721,53 @@ client.on('interactionCreate', async i => {
                     new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+100 pkt)').setStyle(ButtonStyle.Success)
                 );
             await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
-            return;
-        }
-
-        if (cmd === 'reload') {
+        } else if (commandName === 'reload') {
             if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
             await i.deferReply({ ephemeral: true });
             await registerCommands();
             return i.editReply('✅ Commands reloaded.');
-        }
-        if (cmd === 'zakoncz') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
-            if (!voteMessage) return i.reply({ content: '❌ No ongoing vote.', ephemeral: true });
-            await i.deferReply({ ephemeral: true });
-            const res = await endVoting(voteMessage, votes, true);
-            if (res) {
-                voteMessage = null;
-                return i.editReply('✅ Vote ended.');
-            }
-            return i.editReply('❌ Failed to end vote.');
-        }
-
-        if (cmd === 'kolejka_start') {
-            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
-            if(!queueChannelId) {
-                return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
-            }
-            const queueChannel = await client.channels.fetch(queueChannelId);
-            if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
-
-            const oldQueueMsgId = loadQueueMessageId();
-            if (oldQueueMsgId) {
-                try {
-                    const oldMsg = await queueChannel.messages.fetch(oldQueueMsgId);
-                    await oldMsg.delete();
-                    consola.info(`Usunięto starą wiadomość kolejki (ID: ${oldQueueMsgId})`);
-                } catch (err) {
-                    consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
-                }
-            }
-            saveQueueMessageId('');
-            queueMessage = null;
-            currentQueue = [];
-            isLobbyLocked = false;
-            lastPulledUserIds = [];
-            const canManageQueue = isUserQueueManager(i, i.guild);
-            try {
-                queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
-                saveQueueMessageId(queueMessage.id);
-                await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
-            } catch (sendError) {
-                consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
-                await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
-            }
-            return;
-        }
-        if (cmd === 'dodaj') {
-            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            if (!queueMessage) {
-                return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka_start` najpierw.', ephemeral: true });
-            }
-            const userToAdd = i.options.getUser('uzytkownik');
-            if (currentQueue.includes(userToAdd.id)) {
-                return i.reply({ content: `<@${userToAdd.id}> jest już w kolejce.`, ephemeral: true });
-            }
-            currentQueue.push(userToAdd.id);
-            await updateQueueMessage(i);
-            return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
-        }
-        if (cmd === 'pozycja') {
-            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            if (!queueMessage) {
-                return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka_start` najpierw.', ephemeral: true });
-            }
-            const userToPosition = i.options.getUser('uzytkownik');
-            const desiredPosition = i.options.getInteger('wartosc');
-            if (desiredPosition <= 0) {
-                return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
-            }
-            const existingIndex = currentQueue.indexOf(userToPosition.id);
-            if (existingIndex > -1) {
-                currentQueue.splice(existingIndex, 1);
-            }
-            const targetIndex = desiredPosition - 1;
-            if (targetIndex >= currentQueue.length) {
-                currentQueue.push(userToPosition.id);
-                 await updateQueueMessage(i);
-                return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
-            } else {
-                currentQueue.splice(targetIndex, 0, userToPosition.id);
-                 await updateQueueMessage(i);
-                return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
-            }
-        }
-        if (cmd === 'kolejka_nastepny') {
-            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            if (!queueMessage) {
-                return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka_start`.', ephemeral: true });
-            }
-            const liczba = i.options.getInteger('liczba') || 1;
-            if (currentQueue.length === 0) {
-                return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
-            }
-            await i.deferReply({ ephemeral: true });
-            const pulledUsersInfo = [];
-            let overallMoveStatusMessage = "\n**Status przenoszenia:**\n";
-            const currentPulledIdsThisCommand = [];
-            for (let k = 0; k < liczba && currentQueue.length > 0; k++) {
-                const userId = currentQueue.shift();
-                pulledUsersInfo.push(`<@${userId}>`);
-                currentPulledIdsThisCommand.push(userId);
-                const moveStatus = await attemptMovePlayerToLobby(i, userId, i.guild);
-                overallMoveStatusMessage += `${moveStatus.startsWith('Gracz') ? '' : `<@${userId}>: `}${moveStatus}\n`;
-            }
-            lastPulledUserIds = [...currentPulledIdsThisCommand];
-            await updateQueueMessage(i);
-            const pulledMentions = pulledUsersInfo.join(', ');
-            await i.editReply({ content: `🎣 Następujące osoby zostały wyciągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
-            return;
-        }
-        if (cmd === 'kolejka_wyczysc') {
-            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            if (!queueMessage) {
-                return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka_start`.', ephemeral: true });
-            }
-            currentQueue = [];
-            lastPulledUserIds = [];
-            await updateQueueMessage(i);
-            return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
-        }
-
-        if (cmd === 'wyczysc_ranking_punktow') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            saveWynikRank({});
-            consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
-            await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
-            return;
-        }
-        if (cmd === 'usun_punkty') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            const userToRemovePoints = i.options.getUser('uzytkownik');
-            const pointsToRemove = i.options.getInteger('liczba_punktow');
-            if (pointsToRemove <= 0) {
-                return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
-            }
-            const currentPoints = loadWynikRank();
-            const userCurrentPoints = currentPoints[userToRemovePoints.id] || 0;
-            if (userCurrentPoints === 0) {
-                 return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
-            }
-            const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
-            currentPoints[userToRemovePoints.id] = newPoints;
-            saveWynikRank(currentPoints);
-            consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
-            return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
-        }
-        if (cmd === 'dodajpunkty') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            const targetUser = i.options.getUser('uzytkownik');
-            const pointsToAdd = i.options.getInteger('liczba_punktow');
-            const reason = i.options.getString('powod') || 'Brak określonego powodu';
-
-            if (pointsToAdd <= 0) {
-                return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
-            }
-
-            updateWynikRank(targetUser.id, pointsToAdd);
-            const currentPoints = loadWynikRank();
-            const userNewPoints = currentPoints[targetUser.id] || 0;
-
-            consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
-            return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
-        }
-
-
-        if (cmd === 'ktosus') {
+        } else if (commandName === 'ktosus') {
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
-            try {
-                await i.guild.members.fetch();
-                const realMembers = i.guild.members.cache.filter(member => !member.user.bot);
-                if (realMembers.size === 0) {
-                    return i.reply({ content: 'Nie ma kogo wybrać, sami admini i boty! 😉', ephemeral: true });
-                }
-                const membersArray = Array.from(realMembers.values());
-                const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
-                return i.reply(`Hmm... 🤔 Coś mi tu nie gra... <@${randomMember.id}> wygląda dzisiaj wyjątkowo podejrzanie... 👀`);
-            } catch (err) {
-                consola.error("Error fetching members for /ktosus:", err);
-                return i.reply({ content: 'Nie udało się pobrać listy użytkowników, spróbuj ponownie.', ephemeral: true});
+
+            const cooldowns = loadJSON(KTOSUS_COOLDOWNS_FILE, {});
+            const now = Date.now();
+            const userCooldown = cooldowns[i.user.id];
+
+            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION)) {
+                const timeLeft = Math.ceil((KTOSUS_COOLDOWN_DURATION - (now - userCooldown)) / (1000 * 60 * 60));
+                return i.reply({ content: `Musisz poczekać jeszcze około ${timeLeft}h, zanim znowu użyjesz tej komendy.`, ephemeral: true });
             }
+
+            if (!GAME_LOBBY_VOICE_CHANNEL_ID) {
+                return i.reply({ content: 'Kanał lobby gry nie jest skonfigurowany. Nie można wybrać podejrzanego.', ephemeral: true });
+            }
+
+            try {
+                const gameLobbyChannel = await i.guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
+                if (!gameLobbyChannel || gameLobbyChannel.type !== ChannelType.GuildVoice) {
+                    return i.reply({ content: 'Nie znaleziono kanału lobby gry lub nie jest to kanał głosowy.', ephemeral: true });
+                }
+
+                const membersInLobby = gameLobbyChannel.members.filter(member => !member.user.bot);
+                if (membersInLobby.size === 0) {
+                    return i.reply({ content: 'Lobby gry jest puste! Nie ma kogo wybrać. 😉', ephemeral: true });
+                }
+
+                const membersArray = Array.from(membersInLobby.values());
+                const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
+
+                cooldowns[i.user.id] = now;
+                saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
+
+                return i.reply(`Hmm... 🤔 Coś mi tu nie gra... <@${randomMember.id}> wygląda dzisiaj wyjątkowo podejrzanie... 👀 (Wybrano z lobby gry)`);
+            } catch (err) {
+                consola.error("Error in /ktosus command:", err);
+                return i.reply({ content: 'Nie udało się wybrać podejrzanego, spróbuj ponownie.', ephemeral: true});
+            }
+        } else {
+             consola.warn(`Unknown command /${commandName} attempted by ${i.user.tag}`);
+             await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
         }
-
-        const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'dodajpunkty', 'ktosus', 'ankieta'];
-        if (!knownCommands.includes(cmd)){
-            consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
-            await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
-        }
-
-
     } catch (e) {
         const interactionDetails = i.isCommand() ? i.commandName : (i.isButton() || i.isModalSubmit() || i.isAnySelectMenu() ? i.customId : 'unknown interaction');
         consola.error(`Error during interaction '${interactionDetails}' by ${i.user.tag} in guild ${i.guild?.id || 'DM'}:`, e);
@@ -1918,7 +1854,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                     const leaveEmbed = new EmbedBuilder()
                         .setColor(0xFF0000)
                         .setAuthor({ name: `${userTag} (${userId})`, iconURL: userAvatar })
-                        .setDescription(`⬅️ <@${userId}> **opuścił/a** kanał głosowy <#${MONITORED_VC_ID}> (${monitoredChannel.name})`)
+                        .setDescription(`⬅️ <@${userId}> **opuścił/a** kanał głosowego <#${MONITORED_VC_ID}> (${monitoredChannel.name})`)
                         .addFields({ name: 'Czas spędzony na kanale', value: durationString, inline: false })
                         .setTimestamp()
                         .setFooter({text: `Log Wyjścia`});
@@ -2096,11 +2032,10 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             consola.info(`User ${member.user.tag} joined game lobby (ID: ${GAME_LOBBY_VOICE_CHANNEL_ID}). Current non-bot members: ${lobbyMemberCount}. Lobby locked: ${isLobbyLocked}`);
 
             if (isLobbyLocked) {
-                if (isUserAdmin({user: member.user}, guild)) { // Admini i Liderzy mogą dołączyć do zablokowanego lobby
+                if (isUserAdmin({user: member.user}, guild)) {
                     consola.info(`Admin/Leader ${member.user.tag} joined locked lobby. Allowing.`);
                     return;
                 }
-                 // Mistrz Lobby nie może dołączyć do zablokowanego lobby, chyba że został wyciągnięty z kolejki
                 const wasPulledIndex = lastPulledUserIds.indexOf(member.id);
                 if (wasPulledIndex !== -1) {
                     consola.info(`User ${member.user.tag} was pulled from queue. Allowing to join locked lobby.`);
