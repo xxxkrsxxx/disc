@@ -355,6 +355,29 @@ async function registerCommands() {
             )
             .toJSON()
     );
+    // Nowa komenda /dodajpunkty
+    cmds.push(
+        new SlashCommandBuilder()
+            .setName('dodajpunkty')
+            .setDescription('Ręcznie dodaje punkty użytkownikowi (admin).')
+            .addUserOption(option =>
+                option.setName('uzytkownik')
+                .setDescription('Użytkownik, któremu chcesz dodać punkty.')
+                .setRequired(true)
+            )
+            .addIntegerOption(option =>
+                option.setName('liczba_punktow')
+                .setDescription('Liczba punktów do dodania.')
+                .setRequired(true)
+                .setMinValue(1) // Można ustawić, aby można było dodawać też 0 lub ujemne, jeśli potrzebne
+            )
+            .addStringOption(option =>
+                option.setName('powod')
+                .setDescription('Opcjonalny powód przyznania punktów.')
+                .setRequired(false)
+            )
+            .toJSON()
+    );
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
@@ -400,7 +423,7 @@ function getPanelRow() {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('show_wynikirank')
-            .setLabel('Odśwież Ranking �')
+            .setLabel('Odśwież Ranking 🏆')
             .setStyle(ButtonStyle.Primary)
     );
 }
@@ -628,27 +651,42 @@ function isUserQueueManager(interactionOrUser, guild) {
 
 
 async function attemptMovePlayerToLobby(interaction, userId, guild) {
+    let moveStatusMessage = ''; // Initialize status message
     try {
         const member = await guild.members.fetch(userId).catch(() => null);
-        if (!member) return `Nie znaleziono gracza <@${userId}> na serwerze.`;
+        if (!member) {
+            moveStatusMessage = `Nie znaleziono gracza <@${userId}> na serwerze.`;
+            return moveStatusMessage;
+        }
+
+        // Wyślij DM do użytkownika, który jest wyciągany z kolejki
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        try {
+            await member.send(dmMessage);
+            consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
+        } catch (dmError) {
+            consola.warn(`[Queue Pull] Could not send DM to ${member.user.tag} (${userId}). They might have DMs disabled. Error: ${dmError.message}`);
+        }
 
         if (member.voice.channelId && member.voice.channelId === WAITING_ROOM_VOICE_CHANNEL_ID) {
             await member.voice.setChannel(GAME_LOBBY_VOICE_CHANNEL_ID);
-            return `Gracz <@${userId}> został przeniesiony z poczekalni do lobby gry.`;
+            moveStatusMessage = `Gracz <@${userId}> został przeniesiony z poczekalni do lobby gry.`;
         } else if (member.voice.channelId) {
-            return `Gracz <@${userId}> jest na innym kanale głosowym (<#${member.voice.channelId}>), nie w poczekalni. Nie został przeniesiony.`;
+            moveStatusMessage = `Gracz <@${userId}> jest na innym kanale głosowym (<#${member.voice.channelId}>), nie w poczekalni. Nie został przeniesiony, ale został powiadomiony.`;
         } else {
-            return `Gracz <@${userId}> nie jest na żadnym kanale głosowym.`;
+            moveStatusMessage = `Gracz <@${userId}> nie jest na żadnym kanale głosowym, ale został powiadomiony.`;
         }
     } catch (error) {
-        consola.error(`[MovePlayer] Error moving user ${userId}:`, error);
-        if (error.code === 50013) { // Missing permissions
-            return `Nie udało się przenieść gracza <@${userId}> - brak uprawnień bota do przenoszenia.`;
-        } else if (error.code === 50001) { // Missing access
-            return `Nie udało się przenieść gracza <@${userId}> - brak dostępu bota do kanału.`;
+        consola.error(`[MovePlayer] Error moving user ${userId} or sending DM:`, error);
+        if (error.code === 50013) {
+            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> - brak uprawnień bota do przenoszenia.`;
+        } else if (error.code === 50001) {
+            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> - brak dostępu bota do kanału.`;
+        } else {
+            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> (błąd: ${error.message}).`;
         }
-        return `Nie udało się przenieść gracza <@${userId}> (błąd: ${error.message}).`;
     }
+    return moveStatusMessage;
 }
 
 
@@ -673,7 +711,6 @@ function getQueueEmbed() {
     return embed;
 }
 
-// Zmieniono parametr na 'canManageQueue' dla jasności
 function getQueueActionRow(canManageQueue = false) {
     const row = new ActionRowBuilder()
         .addComponents(
@@ -689,7 +726,7 @@ function getQueueActionRow(canManageQueue = false) {
                 .setEmoji('❌')
         );
 
-    if (canManageQueue) { // Przycisk "Pull" widoczny dla osób mogących zarządzać kolejką
+    if (canManageQueue) {
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
@@ -710,11 +747,11 @@ async function updateQueueMessage(interaction) {
     try {
         const guild = interaction.guild || await client.guilds.fetch(GUILD_ID);
         const userForPermCheck = interaction.user ? interaction.user : (interaction.id ? interaction : { id: OWNER_ID, user: {id: OWNER_ID} });
-        const canManageQueue = isUserQueueManager(userForPermCheck, guild); // Sprawdzenie uprawnień do zarządzania kolejką
+        const canManageQueue = isUserQueueManager(userForPermCheck, guild);
         await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
     } catch (error) {
         consola.error('Błąd podczas aktualizacji wiadomości kolejki:', error);
-        if (error.code === 10008) { // Unknown Message
+        if (error.code === 10008) {
             consola.warn('Wiadomość panelu kolejki została usunięta. Wyczyszczono ID.');
             queueMessage = null;
             saveQueueMessageId('');
@@ -732,7 +769,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 
     const embed = new EmbedBuilder()
         .setTitle(`⚙️ Panel Zarządzania Kanałem: ${vcName}`)
-        .setDescription(`Status: ${isLocked ? '🔒 Zablokowany' : '🔓 Otwarty'}\nLimit miejsc: ${currentLimit === 0 ? 'Brak' : currentLimit}`)
+        .setDescription(`Status: ${isLocked ? '🔒 Zablokowany' : '� Otwarty'}\nLimit miejsc: ${currentLimit === 0 ? 'Brak' : currentLimit}`)
         .setColor('#3498DB')
         .setFooter({text: `Kanał głosowy: ${vcName} (ID: ${vcId})`});
 
@@ -766,7 +803,7 @@ const monitoredVcSessionJoins = new Map();
 
 
 async function manualStartPoll(interaction) {
-    if (!isUserAdmin(interaction, interaction.guild)) { // Tylko admini mogą ręcznie startować ankietę
+    if (!isUserAdmin(interaction, interaction.guild)) {
         return interaction.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
     }
 
@@ -1574,7 +1611,7 @@ client.on('interactionCreate', async i => {
         }
 
         if (cmd === 'win') {
-            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
+            if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
             const embed = new EmbedBuilder()
@@ -1609,7 +1646,6 @@ client.on('interactionCreate', async i => {
             return i.editReply('❌ Failed to end vote.');
         }
 
-        // Komendy kolejki - używają isUserQueueManager
         if (cmd === 'kolejka_start') {
             if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
@@ -1634,7 +1670,7 @@ client.on('interactionCreate', async i => {
             currentQueue = [];
             isLobbyLocked = false;
             lastPulledUserIds = [];
-            const canManageQueue = isUserQueueManager(i, i.guild); // Sprawdzenie dla przycisku "Pull"
+            const canManageQueue = isUserQueueManager(i, i.guild);
             try {
                 queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
                 saveQueueMessageId(queueMessage.id);
@@ -1720,7 +1756,6 @@ client.on('interactionCreate', async i => {
             return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
         }
 
-        // Komendy punktacji - używają isUserAdmin
         if (cmd === 'wyczysc_ranking_punktow') {
             if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
@@ -1750,6 +1785,27 @@ client.on('interactionCreate', async i => {
             consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
             return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
         }
+        // Obsługa nowej komendy /dodajpunkty
+        if (cmd === 'dodajpunkty') {
+            if (!isUserAdmin(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            }
+            const targetUser = i.options.getUser('uzytkownik');
+            const pointsToAdd = i.options.getInteger('liczba_punktow');
+            const reason = i.options.getString('powod') || 'Brak określonego powodu'; // Domyślny powód
+
+            if (pointsToAdd <= 0) {
+                return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
+            }
+
+            updateWynikRank(targetUser.id, pointsToAdd);
+            const currentPoints = loadWynikRank();
+            const userNewPoints = currentPoints[targetUser.id] || 0;
+
+            consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
+            return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
+        }
+
 
         if (cmd === 'ktosus') {
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
@@ -1768,7 +1824,7 @@ client.on('interactionCreate', async i => {
             }
         }
 
-        const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'ktosus', 'ankieta'];
+        const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'dodajpunkty', 'ktosus', 'ankieta'];
         if (!knownCommands.includes(cmd)){
             consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
             await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
