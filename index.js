@@ -825,17 +825,17 @@ client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
     // TYMCZASOWY KOD DO CZYSZCZENIA GLOBALNYCH KOMEND - URUCHOMIĆ RAZ I USUNĄĆ/ZAKOMENTOWAĆ
-     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-     try {
-         consola.info('Attempting to delete all global commands.');
-         await rest.put(
-             Routes.applicationCommands(CLIENT_ID), // Endpoint dla komend globalnych
-             { body: [] } // Pusta tablica usuwa wszystkie komendy
-         );
-         consola.success('✅ Successfully deleted all global commands.');
-     } catch (error) {
-         consola.error('❌ Failed to delete global commands:', error);
-     }
+    // const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+    // try {
+    //     consola.info('Attempting to delete all global commands.');
+    //     await rest.put(
+    //         Routes.applicationCommands(CLIENT_ID), // Endpoint dla komend globalnych
+    //         { body: [] } // Pusta tablica usuwa wszystkie komendy
+    //     );
+    //     consola.success('✅ Successfully deleted all global commands.');
+    // } catch (error) {
+    //     consola.error('❌ Failed to delete global commands:', error);
+    // }
     // KONIEC TYMCZASOWEGO KODU
 
     await registerCommands(); // Rejestruje komendy tylko dla GUILD_ID
