@@ -38,6 +38,7 @@ const {
     ROLE_ID,      // Rola pingowana przy ankietach
     GUILD_ID,     // Kluczowe dla działania na jednym serwerze
     LEADER_ROLE_ID,
+    LOBBY_MASTER_ROLE_ID, // Nowa rola dla Mistrza Lobby
     PANEL_CHANNEL_ID,
     QUEUE_CHANNEL_ID,
     GAME_LOBBY_VOICE_CHANNEL_ID,
@@ -52,7 +53,7 @@ const {
     DEFAULT_POLL_CHANNEL_ID,
     DEFAULT_PANEL_CHANNEL_ID,
     DEFAULT_QUEUE_CHANNEL_ID,
-    WEEKLY_MVP_CHANNEL_ID // Nowa zmienna dla cotygodniowego kanału MVP
+    WEEKLY_MVP_CHANNEL_ID
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -73,6 +74,7 @@ function checkEnvVar(varName, value, featureName, isCritical = false) {
 }
 checkEnvVar('CHANNEL_ID', CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID, 'Polls (scheduled/test command)', true);
 checkEnvVar('ROLE_ID', ROLE_ID, 'Poll pings');
+checkEnvVar('LOBBY_MASTER_ROLE_ID', LOBBY_MASTER_ROLE_ID, 'Lobby Master role (for queue management)');
 checkEnvVar('PANEL_CHANNEL_ID', PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID, 'Ranking panel display');
 checkEnvVar('QUEUE_CHANNEL_ID', QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID, 'Queue system');
 checkEnvVar('GAME_LOBBY_VOICE_CHANNEL_ID', GAME_LOBBY_VOICE_CHANNEL_ID, 'Lobby protection');
@@ -102,10 +104,10 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg';
-const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png'; // Zaktualizowany URL dla rankingu tygodniowego MVP
+const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png';
 
 
-const RANK_FILE = path.join(DATA_DIR, 'rank.json');
+const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json');
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
 const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
@@ -195,21 +197,14 @@ function getWynikRanking(includeMvpMention = false, mvpUserId = null) {
     return rankingText;
 }
 
-
-function recordPollVoteActivity(userId) {
-    const pollActivity = loadJSON(RANK_FILE, {});
-    pollActivity[userId] = (pollActivity[userId] || 0) + 1;
-    saveJSON(RANK_FILE, pollActivity);
-    consola.info(`[Poll Activity] Recorded vote for ${userId}. Total votes for this cycle: ${pollActivity[userId]}`);
-}
 function addPollPoints(userId) {
     updateWynikRank(userId, 100);
     consola.info(`[Poll Voting] Added 100 points to ${userId} for first vote in poll cycle.`);
 }
 
-function resetPollActivityData() {
-    saveJSON(RANK_FILE, {});
-    consola.info('📉 Dane aktywności w ankietach (rank.json) do śledzenia pierwszego głosu zresetowane.');
+function resetPollBonusData() {
+    saveJSON(POLL_BONUS_STATUS_FILE, {});
+    consola.info('💰 Dane statusu bonusu za głosowanie w ankietach (pollBonusStatus.json) zresetowane.');
 }
 
 
@@ -287,20 +282,20 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('kolejka_start')
-            .setDescription('Rozpoczyna i wyświetla panel kolejki (admin)')
+            .setDescription('Rozpoczyna i wyświetla panel kolejki (admin/mistrz lobby)')
             .toJSON()
     );
     cmds.push(
         new SlashCommandBuilder()
             .setName('dodaj')
-            .setDescription('Dodaje gracza na koniec kolejki (admin).')
+            .setDescription('Dodaje gracza na koniec kolejki (admin/mistrz lobby).')
             .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do dodania.').setRequired(true))
             .toJSON()
     );
     cmds.push(
         new SlashCommandBuilder()
             .setName('pozycja')
-            .setDescription('Ustawia gracza na konkretnej pozycji w kolejce (admin).')
+            .setDescription('Ustawia gracza na konkretnej pozycji w kolejce (admin/mistrz lobby).')
             .addIntegerOption(option =>
                 option.setName('wartosc')
                 .setDescription('Numer pozycji w kolejce (zaczynając od 1).')
@@ -317,7 +312,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('kolejka_nastepny')
-            .setDescription('Pobiera następną osobę z kolejki (admin) i próbuje przenieść do lobby.')
+            .setDescription('Pobiera następną osobę z kolejki (admin/mistrz lobby) i próbuje przenieść do lobby.')
             .addIntegerOption(option =>
                 option.setName('liczba')
                     .setDescription('Liczba osób do pobrania (domyślnie 1)')
@@ -328,13 +323,13 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('kolejka_wyczysc')
-            .setDescription('Czyści całą kolejkę (admin)')
+            .setDescription('Czyści całą kolejkę (admin/mistrz lobby)')
             .toJSON()
     );
 
     const winCommand = new SlashCommandBuilder()
         .setName('win')
-        .setDescription('Rozpocznij proces przyznawania punktów za role.');
+        .setDescription('Rozpocznij proces przyznawania punktów za role (admin).');
     cmds.push(winCommand.toJSON());
 
     cmds.push(
@@ -398,7 +393,6 @@ function getPanelEmbed(guild) {
     return new EmbedBuilder()
         .setTitle('Admin Table Stats')
         .setColor(0xDAA520)
-        // .setImage(RANKING_IMG_URL) // Usunięto obrazek z normalnego panelu rankingu
         .setDescription(rankingDescription);
 }
 
@@ -406,7 +400,7 @@ function getPanelRow() {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('show_wynikirank')
-            .setLabel('Odśwież Ranking 🏆')
+            .setLabel('Odśwież Ranking �')
             .setStyle(ButtonStyle.Primary)
     );
 }
@@ -604,18 +598,34 @@ let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
 let isLobbyLocked = false;
-// const temporaryVoiceChannels = new Map(); // JEDYNA GLOBALNA DEKLARACJA JEST PONIŻEJ, W SEKCJI // --- BOT SETUP ---
 
+// Funkcja sprawdzająca ogólne uprawnienia administracyjne bota (Owner lub Leader)
 function isUserAdmin(interactionOrUser, guild) {
     const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
     if (userId === OWNER_ID) return true;
     if (!guild) {
-        consola.warn("[isUserAdmin] Guild object is undefined.");
+        consola.warn("[isUserAdmin] Guild object is undefined for admin check.");
         return false;
     }
     const member = guild.members.cache.get(userId);
     return member && member.roles.cache.has(LEADER_ROLE_ID);
 }
+
+// Nowa funkcja sprawdzająca uprawnienia do zarządzania kolejką (Owner, Leader LUB Mistrz Lobby)
+function isUserQueueManager(interactionOrUser, guild) {
+    if (isUserAdmin(interactionOrUser, guild)) return true; // Admini mają dostęp do wszystkiego
+
+    if (!LOBBY_MASTER_ROLE_ID) return false; // Jeśli rola Mistrza Lobby nie jest skonfigurowana
+
+    const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
+    if (!guild) {
+        consola.warn("[isUserQueueManager] Guild object is undefined for queue manager check.");
+        return false;
+    }
+    const member = guild.members.cache.get(userId);
+    return member && member.roles.cache.has(LOBBY_MASTER_ROLE_ID);
+}
+
 
 async function attemptMovePlayerToLobby(interaction, userId, guild) {
     try {
@@ -663,7 +673,8 @@ function getQueueEmbed() {
     return embed;
 }
 
-function getQueueActionRow(isAdmin = false) {
+// Zmieniono parametr na 'canManageQueue' dla jasności
+function getQueueActionRow(canManageQueue = false) {
     const row = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -678,7 +689,7 @@ function getQueueActionRow(isAdmin = false) {
                 .setEmoji('❌')
         );
 
-    if (isAdmin) {
+    if (canManageQueue) { // Przycisk "Pull" widoczny dla osób mogących zarządzać kolejką
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
@@ -698,9 +709,9 @@ async function updateQueueMessage(interaction) {
 
     try {
         const guild = interaction.guild || await client.guilds.fetch(GUILD_ID);
-        const userForAdminCheck = interaction.user ? interaction.user : (interaction.id ? interaction : { id: OWNER_ID, user: {id: OWNER_ID} }); // Simplified check for internal updates
-        const adminStatus = isUserAdmin(userForAdminCheck, guild);
-        await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(adminStatus)] });
+        const userForPermCheck = interaction.user ? interaction.user : (interaction.id ? interaction : { id: OWNER_ID, user: {id: OWNER_ID} });
+        const canManageQueue = isUserQueueManager(userForPermCheck, guild); // Sprawdzenie uprawnień do zarządzania kolejką
+        await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
     } catch (error) {
         consola.error('Błąd podczas aktualizacji wiadomości kolejki:', error);
         if (error.code === 10008) { // Unknown Message
@@ -738,7 +749,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     );
 
     const components = [row1];
-    if (row2.components.length > 0) { // Ensure row2 is not empty before adding
+    if (row2.components.length > 0) {
         components.push(row2);
     }
     consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
@@ -750,12 +761,12 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
 const votes = new Collection();
 let voteMessage = null;
-const temporaryVoiceChannels = new Map(); // JEDYNA GLOBALNA DEKLARACJA - UPEWNIJ SIĘ, ŻE NIE MA INNEJ!
+const temporaryVoiceChannels = new Map();
 const monitoredVcSessionJoins = new Map();
 
 
 async function manualStartPoll(interaction) {
-    if (!isUserAdmin(interaction, interaction.guild)) {
+    if (!isUserAdmin(interaction, interaction.guild)) { // Tylko admini mogą ręcznie startować ankietę
         return interaction.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
     }
 
@@ -790,7 +801,7 @@ async function manualStartPoll(interaction) {
             contentMessage = `<@&${ROLE_ID}>`;
         }
 
-        if (voteMessage) { // If a previous poll message exists
+        if (voteMessage) {
             try {
                 await voteMessage.delete();
                 consola.info('[Manual Poll Start] Stara wiadomość ankiety (voteMessage) usunięta.');
@@ -813,7 +824,21 @@ async function manualStartPoll(interaction) {
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
-    await registerCommands();
+    // TYMCZASOWY KOD DO CZYSZCZENIA GLOBALNYCH KOMEND - URUCHOMIĆ RAZ I USUNĄĆ/ZAKOMENTOWAĆ
+    // const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+    // try {
+    //     consola.info('Attempting to delete all global commands.');
+    //     await rest.put(
+    //         Routes.applicationCommands(CLIENT_ID), // Endpoint dla komend globalnych
+    //         { body: [] } // Pusta tablica usuwa wszystkie komendy
+    //     );
+    //     consola.success('✅ Successfully deleted all global commands.');
+    // } catch (error) {
+    //     consola.error('❌ Failed to delete global commands:', error);
+    // }
+    // KONIEC TYMCZASOWEGO KODU
+
+    await registerCommands(); // Rejestruje komendy tylko dla GUILD_ID
 
     const panelChannelIdToUse = PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID;
     if (panelChannelIdToUse) {
@@ -825,17 +850,17 @@ client.once('ready', async () => {
             let panelMessageId = loadPanelMessageId();
             let panelMsg = null;
 
-            const guild = await client.guilds.fetch(GUILD_ID).catch(e => { // Fetch guild for initial embed
+            const guild = await client.guilds.fetch(GUILD_ID).catch(e => {
                 consola.error(`[Panel] Failed to fetch GUILD_ID ${GUILD_ID} for initial panel: ${e.message}`);
                 return null;
             });
 
-            const panelContent = { embeds: [getPanelEmbed(guild)] }; // Pass guild here
+            const panelContent = { embeds: [getPanelEmbed(guild)] };
             const panelComponentsRow = getPanelRow();
-            if (panelComponentsRow && panelComponentsRow.components.length > 0) { // Check if row has components
+            if (panelComponentsRow && panelComponentsRow.components.length > 0) {
                 panelContent.components = [panelComponentsRow];
             } else {
-                panelContent.components = []; // Ensure components is always an array
+                panelContent.components = [];
             }
 
             if (panelMessageId) {
@@ -844,24 +869,23 @@ client.once('ready', async () => {
                     consola.info(`[Panel] Loaded existing panel message (ID: ${panelMessageId}) from channel ${panelCh.name}`);
                 } catch (err){
                     consola.warn(`[Panel] Failed to fetch existing panel message (ID: ${panelMessageId}), will create a new one. Error: ${err.message}`);
-                    panelMessageId = null; // Reset ID if fetch failed
+                    panelMessageId = null;
                 }
             }
 
-            if (!panelMsg) { // If no message or fetch failed
+            if (!panelMsg) {
                 try {
                     consola.info(`[Panel] No existing panel message found or fetch failed. Attempting to send a new one to ${panelCh.name}.`);
                     const sent = await panelCh.send(panelContent);
                     savePanelMessageId(sent.id);
                     consola.info(`[Panel] New panel created (ID: ${sent.id}) in channel ${panelCh.name}`);
                 } catch (e) { consola.error("[Panel] Failed to create new panel message:", e); }
-            } else { // Message exists, try to edit
+            } else {
                 try {
                     await panelMsg.edit(panelContent);
                     consola.info(`[Panel] Panel refreshed (ID: ${panelMsg.id}) in channel ${panelCh.name}`);
                 } catch (e) {
                     consola.error("[Panel] Failed to refresh existing panel message:", e);
-                    // Fallback: try to send a new one if edit fails (e.g., message deleted by user)
                     try {
                         consola.warn(`[Panel] Attempting to send a new panel message as fallback to ${panelCh.name}.`);
                         const sent = await panelCh.send(panelContent);
@@ -888,11 +912,10 @@ client.once('ready', async () => {
                 try {
                     queueMessage = await queueChannelObj.messages.fetch(qMsgId);
                     consola.info(`Queue message loaded (ID: ${queueMessage.id}). Performing initial update.`);
-                    // Create a pseudo-interaction object for updateQueueMessage
-                    const guild = await client.guilds.fetch(GUILD_ID); // Ensure guild is available
-                    const ownerUser = { id: OWNER_ID, user: {id: OWNER_ID} }; // Simulate an admin user for button visibility
-                    const pseudoInteraction = { guild: guild, user: ownerUser, channel: queueMessage.channel };
-                    await updateQueueMessage(pseudoInteraction); // Pass the pseudo-interaction
+                    const guild = await client.guilds.fetch(GUILD_ID);
+                    const pseudoUserForPermCheck = { id: OWNER_ID, user: {id: OWNER_ID} };
+                    const pseudoInteraction = { guild: guild, user: pseudoUserForPermCheck, channel: queueMessage.channel };
+                    await updateQueueMessage(pseudoInteraction);
                     consola.info(`Queue message refreshed (ID: ${queueMessage.id})`);
                 } catch (err) {
                     consola.warn(`Nie udało się załadować wiadomości kolejki (ID: ${qMsgId}). Prawdopodobnie została usunięta. Użyj /kolejka_start.`);
@@ -927,8 +950,7 @@ client.once('ready', async () => {
         consola.error(`Nie udało się sprawdzić stanu lobby przy starcie: ${error}`);
     }
 
-    // Zmieniono czas startu ankiety na 10:00 czasu serwera
-    schedule.scheduleJob('0 10 * * *', async () => { // Start poll at 10:00 AM server time
+    schedule.scheduleJob('0 10 * * *', async () => {
         try {
             const pollChannelIdToUse = CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID;
             if (!pollChannelIdToUse) {
@@ -939,9 +961,9 @@ client.once('ready', async () => {
                 consola.error(`Scheduled Poll: Nie znaleziono kanału dla ankiet (ID: ${pollChannelIdToUse})`);
                 return;
             }
-            votes.clear(); // Clear previous votes
+            votes.clear();
             consola.info('Scheduled Poll: Lokalna kolekcja głosów (votes) wyczyszczona przed nową ankietą.');
-            const initialPollEmbeds = buildPollEmbeds(votes); // Build embeds with empty votes
+            const initialPollEmbeds = buildPollEmbeds(votes);
             const pollRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('vote_20').setEmoji('<:catJAM:1369714552916148224>').setLabel('Będę! (20:00)').setStyle(ButtonStyle.Success),
@@ -950,10 +972,10 @@ client.once('ready', async () => {
                 new ButtonBuilder().setCustomId('poll_show_voters').setEmoji('👀').setLabel('Pokaż Głosujących').setStyle(ButtonStyle.Secondary)
             );
             let contentMessage = '';
-            if (ROLE_ID) { // Ping role if configured
+            if (ROLE_ID) {
                 contentMessage = `<@&${ROLE_ID}>`;
             }
-            if (voteMessage) { // If a previous poll message exists, delete it
+            if (voteMessage) {
                 try {
                     await voteMessage.delete();
                     consola.info('Scheduled Poll: Stara wiadomość ankiety (voteMessage) usunięta.');
@@ -962,30 +984,29 @@ client.once('ready', async () => {
                 }
             }
             voteMessage = await pollChannel.send({ content: contentMessage, embeds: initialPollEmbeds, components: [pollRow] });
-            consola.info(`Scheduled Poll: Ankieta godzinowa została wysłana na kanał ${pollChannel.name} (ID: ${voteMessage.id}) o 10:00 czasu serwera`); // Zaktualizowano log
+            consola.info(`Scheduled Poll: Ankieta godzinowa została wysłana na kanał ${pollChannel.name} (ID: ${voteMessage.id}) o 10:00 czasu serwera`);
         } catch (e) { consola.error('Error scheduling vote start:', e); }
     });
 
-    // Zmieniono czas zakończenia ankiety na 16:00 czasu serwera
-    schedule.scheduleJob('0 16 * * *', async () => { // End poll at 16:00 PM server time
+    schedule.scheduleJob('0 16 * * *', async () => {
         try {
             if (voteMessage) {
-                const result = await endVoting(voteMessage, votes, true); // Force end
+                const result = await endVoting(voteMessage, votes, true);
                 if (result) {
-                    consola.info('Scheduled Poll: Głosowanie zakończone automatycznie o 16:00 i wyniki ogłoszone.'); // Zaktualizowano log
-                    voteMessage = null; // Clear the message object as it's no longer active
+                    consola.info('Scheduled Poll: Głosowanie zakończone automatycznie o 16:00 i wyniki ogłoszone.');
+                    voteMessage = null;
                 } else {
-                    consola.error("Scheduled Poll: endVoting returned false at 16:00."); // Zaktualizowano log
+                    consola.error("Scheduled Poll: endVoting returned false at 16:00.");
                 }
             } else {
-                consola.info('Scheduled Poll: Próba zakończenia głosowania o 16:00, ale wiadomość ankiety (voteMessage) nie jest aktywna lub nie istnieje.'); // Zaktualizowano log
+                consola.info('Scheduled Poll: Próba zakończenia głosowania o 16:00, ale wiadomość ankiety (voteMessage) nie jest aktywna lub nie istnieje.');
             }
-        } catch (e) { consola.error('Error scheduling vote end at 16:00:', e); } // Zaktualizowano log
+        } catch (e) { consola.error('Error scheduling vote end at 16:00:', e); }
     });
 
-    schedule.scheduleJob('0 0 * * 1', resetPollActivityData); // Reset poll activity data every Monday at 00:00
+    schedule.scheduleJob('0 0 * * 1', resetPollBonusData);
 
-    schedule.scheduleJob('5 9 * * 1', async () => { // Award MVP and send weekly ranking every Monday at 09:05
+    schedule.scheduleJob('5 9 * * 1', async () => {
         try {
             const guild = await client.guilds.fetch(GUILD_ID);
             if (!guild) {
@@ -1063,7 +1084,7 @@ client.once('ready', async () => {
                     .setTitle('🔪MVP AMONG TYGODNIA🔪')
                     .setDescription(rankingDescription + mvpAnnouncement)
                     .setColor(0xDAA520)
-                    .setImage(MVP_WEEKLY_RANKING_IMG_URL) 
+                    .setImage(MVP_WEEKLY_RANKING_IMG_URL)
                     .setFooter({ text: "Gratulacje!!" });
                 await targetChannel.send({ embeds: [embed] });
                 consola.info(`[Weekly MVP] Sent weekly MVP announcement to channel ${targetChannel.name} (ID: ${targetChannel.id})`);
@@ -1085,12 +1106,12 @@ client.on('interactionCreate', async i => {
 
         if (i.isButton()) {
             const panelMsgId = loadPanelMessageId();
-            if (i.message.id === panelMsgId && i.customId === 'show_wynikirank') { // Panel refresh button
+            if (i.message.id === panelMsgId && i.customId === 'show_wynikirank') {
                 await i.deferUpdate();
                 const wr = loadWynikRank();
                 const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
                 let currentMvpId = null;
-                if (MVP_ROLE_ID && i.guild) { // Check for guild before accessing roles
+                if (MVP_ROLE_ID && i.guild) {
                     const mvpRole = await i.guild.roles.fetch(MVP_ROLE_ID).catch(() => null);
                     if (mvpRole) {
                         const mvpMember = i.guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
@@ -1101,8 +1122,7 @@ client.on('interactionCreate', async i => {
                 const embed = new EmbedBuilder()
                     .setTitle('Admin Table Stats')
                     .setColor(0xDAA520)
-                    // .setImage(RANKING_IMG_URL) // Usunięto obrazek
-                    .setDescription(getWynikRanking(true, currentMvpId)); // Pass MVP ID
+                    .setDescription(getWynikRanking(true, currentMvpId));
                 return i.editReply({ embeds: [embed], components: [getPanelRow()] });
             }
         }
@@ -1111,29 +1131,36 @@ client.on('interactionCreate', async i => {
             if (!voteMessage || i.message.id !== voteMessage.id) {
                 return i.reply({ content: 'To głosowanie jest już nieaktywne lub zakończone.', ephemeral: true });
             }
-            const user = i.user.id;
+            const user = i.user;
             const newVote = i.customId;
-            const oldVote = votes.get(user);
+            const oldVote = votes.get(user.id);
 
             let replyMessageContent = '';
+            const pollBonusStatus = loadJSON(POLL_BONUS_STATUS_FILE, {});
 
-            if (oldVote === newVote) { // User clicks the same button again - unvote
-                votes.delete(user);
+            if (oldVote === newVote) {
+                votes.delete(user.id);
                 replyMessageContent = 'Twój głos został wycofany.';
-            } else { // New vote or changed vote
-                const pollActivityData = loadJSON(RANK_FILE, {});
-                if (!pollActivityData[user]) { // First vote in this cycle for this user
-                    addPollPoints(user); // Add points for first vote
-                    recordPollVoteActivity(user); // Record the vote activity
-                } else if (oldVote === undefined) { // User had no previous vote in memory but might have in file (e.g. bot restart) - still record activity if it's their first interaction with *this* poll instance
-                    recordPollVoteActivity(user);
-                }
 
-                votes.set(user, newVote);
+                if (pollBonusStatus[user.id]) {
+                    updateWynikRank(user.id, -100);
+                    delete pollBonusStatus[user.id];
+                    saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
+                    replyMessageContent += ' Bonusowe punkty za pierwszy głos w tym cyklu zostały odjęte.';
+                    consola.info(`[Poll Voting] User ${user.tag} unvoted. Removed 100 bonus points. Bonus status reset.`);
+                }
+            } else {
+                if (!pollBonusStatus[user.id]) {
+                    addPollPoints(user.id);
+                    pollBonusStatus[user.id] = true;
+                    saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
+                    consola.info(`[Poll Voting] User ${user.tag} voted for the first time in cycle. Added 100 bonus points.`);
+                }
+                votes.set(user.id, newVote);
                 replyMessageContent = `Zagłosowałeś na ${newVote.replace('vote_', '')}:00.`;
             }
 
-            if (voteMessage) { // Update the poll message with new vote counts
+            if (voteMessage) {
                 const updatedPollEmbeds = buildPollEmbeds(votes);
                 await voteMessage.edit({ embeds: updatedPollEmbeds, components: voteMessage.components });
             }
@@ -1178,16 +1205,16 @@ client.on('interactionCreate', async i => {
                 .setDescription(votersList.length > 0 ? votersList.join('\n') : 'Nikt jeszcze nie zagłosował na tę godzinę.')
                 .setFooter({ text: `Lista głosujących na ${timeLabel}` });
 
-            await i.update({ embeds: [embed], components: [] }); // Update the ephemeral message with the list
+            await i.update({ embeds: [embed], components: [] });
             return;
         }
 
 
         if (i.isButton() && i.customId.startsWith('points_role_')) {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień.', ephemeral: true });
+            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
+                return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
             }
-            await i.deferUpdate(); // Acknowledge the button click
+            await i.deferUpdate();
 
             const roleType = i.customId.replace('points_role_', '');
 
@@ -1195,7 +1222,7 @@ client.on('interactionCreate', async i => {
                 .setCustomId(`points_user_select_${roleType}`)
                 .setPlaceholder('Wybierz graczy (max 25)...')
                 .setMinValues(1)
-                .setMaxValues(25); // Discord's limit for user select menu
+                .setMaxValues(25);
 
             const rowSelect = new ActionRowBuilder().addComponents(userSelect);
 
@@ -1203,26 +1230,26 @@ client.on('interactionCreate', async i => {
             if (roleType === 'neutral') roleNameDisplay = "Neutral (+3 pkt)";
             else if (roleType === 'impostor') roleNameDisplay = "Impostor (+2 pkt)";
 
-            await i.editReply({ // Edit the original ephemeral message
+            await i.editReply({
                 content: `Wybrano: **${roleNameDisplay}**. Teraz wybierz graczy, którzy ją pełnili:`,
                 components: [rowSelect],
-                embeds: [] // Clear previous embeds
+                embeds: []
             });
             consola.info(`[Points System] Leader ${i.user.tag} selected role ${roleType}, presenting user select menu.`);
             return;
         }
 
         if (i.isUserSelectMenu() && i.customId.startsWith('points_user_select_')) {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień.', ephemeral: true });
+            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
+                return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
             }
-            await i.deferUpdate(); // Acknowledge the select menu interaction
+            await i.deferUpdate();
 
             const roleType = i.customId.replace('points_user_select_', '');
-            const selectedUserIds = i.values; // Array of selected user IDs
+            const selectedUserIds = i.values;
             let summaryLines = [];
 
-            let crewmateWinIncrement = 0; // For faction stats
+            let crewmateWinIncrement = 0;
 
             for (const userId of selectedUserIds) {
                 const member = await i.guild.members.fetch(userId).catch(() => null);
@@ -1243,15 +1270,15 @@ client.on('interactionCreate', async i => {
                 } else if (roleType === 'crewmate') {
                     points = 1;
                     roleNameDisplay = "Crewmate";
-                    crewmateWinIncrement++; // Increment for each crewmate selected
+                    crewmateWinIncrement++;
                 }
 
-                updateWynikRank(userId, points); // Update points for the user
+                updateWynikRank(userId, points);
                 summaryLines.push(`✅ <@${userId}> (${member.displayName}): +${points} pkt (${roleNameDisplay})`);
             }
 
             if (roleType === 'crewmate' && crewmateWinIncrement > 0) {
-                incrementCrewmateWins(crewmateWinIncrement); // Increment total crewmate wins
+                incrementCrewmateWins(crewmateWinIncrement);
                 summaryLines.push(`\n📈 Wygrane Crewmate w tej rundzie: ${crewmateWinIncrement}`);
             }
 
@@ -1261,15 +1288,15 @@ client.on('interactionCreate', async i => {
                 finalSummary = "Nie wybrano żadnych graczy lub wystąpiły błędy.";
             }
 
-            await i.editReply({ content: finalSummary, components: [], embeds: [] }); // Update the ephemeral message
+            await i.editReply({ content: finalSummary, components: [], embeds: [] });
             consola.info(`[Points System] Points awarded by ${i.user.tag} for role ${roleType}.`);
             return;
         }
 
 
         if (i.isButton() && i.customId.startsWith('queue_')) {
-            if (i.customId === 'queue_pull_next') { // Admin button to pull next user
-                if (!isUserAdmin(i, i.guild)) {
+            if (i.customId === 'queue_pull_next') {
+                if (!isUserQueueManager(i, i.guild)) { // Użycie nowej funkcji
                     return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
                 }
                 if (!queueMessage) {
@@ -1277,8 +1304,8 @@ client.on('interactionCreate', async i => {
                 }
 
                 if (currentQueue.length > 0) {
-                    const nextUserId = currentQueue.shift(); // Get and remove first user
-                    lastPulledUserIds = [nextUserId]; // Store this user as recently pulled
+                    const nextUserId = currentQueue.shift();
+                    lastPulledUserIds = [nextUserId];
 
                     let moveStatusMessage = await attemptMovePlayerToLobby(i, nextUserId, i.guild);
                     await updateQueueMessage(i);
@@ -1286,8 +1313,8 @@ client.on('interactionCreate', async i => {
                 } else {
                     return i.reply({ content: 'Kolejka jest pusta, nikogo nie można pociągnąć.', ephemeral: true });
                 }
-            } else { // Join or Leave buttons
-                await i.deferUpdate().catch(e => consola.warn("Failed to defer update for queue button:", e.message)); // Defer update for join/leave
+            } else {
+                await i.deferUpdate().catch(e => consola.warn("Failed to defer update for queue button:", e.message));
                 const userId = i.user.id;
                 let replyContent = '';
 
@@ -1315,8 +1342,8 @@ client.on('interactionCreate', async i => {
                         replyContent = `<@${userId}> nie ma Cię w kolejce.`;
                     }
                 }
-                if (queueMessage) await updateQueueMessage(i); // Update the queue message embed
-                if (replyContent) { // Send ephemeral follow-up only if there's content
+                if (queueMessage) await updateQueueMessage(i);
+                if (replyContent) {
                     await i.followUp({ content: replyContent, ephemeral: true });
                 }
                 return;
@@ -1324,9 +1351,9 @@ client.on('interactionCreate', async i => {
         }
 
         if (i.isButton() && i.customId.startsWith('tempvc_')) {
-            const parts = i.customId.split('_'); // e.g., tempvc_lock_vcChannelId
+            const parts = i.customId.split('_');
             const action = parts[1];
-            const vcChannelId = parts.pop(); // Last part is always the ID
+            const vcChannelId = parts.pop();
 
             const channelData = temporaryVoiceChannels.get(vcChannelId);
             if (!channelData || channelData.ownerId !== i.user.id) {
@@ -1337,8 +1364,8 @@ client.on('interactionCreate', async i => {
 
             const voiceChannel = await i.guild.channels.fetch(vcChannelId).catch(() => null);
             if (!voiceChannel) {
-                temporaryVoiceChannels.delete(vcChannelId); // Clean up map
-                if (channelData.controlTextChannelId) { // Attempt to delete control text channel
+                temporaryVoiceChannels.delete(vcChannelId);
+                if (channelData.controlTextChannelId) {
                     const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
                     if (controlTextChannel) await controlTextChannel.delete('Associated VC deleted').catch(e => consola.error("Error deleting control text channel:", e));
                 }
@@ -1357,7 +1384,7 @@ client.on('interactionCreate', async i => {
                 replyEphemeralContent = '🔒 Kanał został zablokowany.';
                 needsPanelUpdate = true;
             } else if (action === 'unlock') {
-                await voiceChannel.permissionOverwrites.edit(i.guild.roles.everyone, { Connect: null }); // Reset to default (allow)
+                await voiceChannel.permissionOverwrites.edit(i.guild.roles.everyone, { Connect: null });
                 newLockedState = false;
                 replyEphemeralContent = '🔓 Kanał został odblokowany.';
                 needsPanelUpdate = true;
@@ -1373,7 +1400,7 @@ client.on('interactionCreate', async i => {
                     .setRequired(true);
                 modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
                 await i.showModal(modal);
-                return; // Modal submission will handle the rest
+                return;
             } else if (action === 'limit' && parts[2] === 'modal') {
                  const modal = new ModalBuilder()
                     .setCustomId(`modal_tempvc_limit_${vcChannelId}`)
@@ -1386,7 +1413,7 @@ client.on('interactionCreate', async i => {
                     .setRequired(true);
                 modal.addComponents(new ActionRowBuilder().addComponents(limitInput));
                 await i.showModal(modal);
-                return; // Modal submission
+                return;
             } else if (action === 'permit' && parts[2] === 'select') {
                 const userSelect = new UserSelectMenuBuilder()
                     .setCustomId(`select_tempvc_permit_${vcChannelId}`)
@@ -1416,8 +1443,7 @@ client.on('interactionCreate', async i => {
                 return;
             }
 
-            // For lock/unlock, reply ephemerally
-            if (!['rename', 'limit', 'permit', 'reject', 'kick'].includes(action) ) { // if it wasn't a modal/select trigger
+            if (!['rename', 'limit', 'permit', 'reject', 'kick'].includes(action) ) {
                  await i.reply({ content: replyEphemeralContent, ephemeral: true });
             }
 
@@ -1437,8 +1463,8 @@ client.on('interactionCreate', async i => {
         }
 
         if (i.isModalSubmit() && i.customId.startsWith('modal_tempvc_')) {
-            const parts = i.customId.split('_'); // modal_tempvc_rename_vcId
-            const action = parts[2]; // rename or limit
+            const parts = i.customId.split('_');
+            const action = parts[2];
             const vcChannelId = parts.pop();
 
             const channelData = temporaryVoiceChannels.get(vcChannelId);
@@ -1490,8 +1516,8 @@ client.on('interactionCreate', async i => {
         }
 
         if (i.isUserSelectMenu() && i.customId.startsWith('select_tempvc_')) {
-            const parts = i.customId.split('_'); // select_tempvc_permit_vcId
-            const action = parts[2]; // permit, reject, kick
+            const parts = i.customId.split('_');
+            const action = parts[2];
             const vcChannelId = parts.pop();
             const selectedUserId = i.values[0];
             const targetUser = await i.guild.members.fetch(selectedUserId);
@@ -1533,7 +1559,7 @@ client.on('interactionCreate', async i => {
                     replyEphemeral = `❌ Użytkownik ${targetUser} nie znajduje się na Twoim kanale.`;
                 }
             }
-            await i.update({ content: replyEphemeral, components: [] }); // Update the ephemeral message that showed the select menu
+            await i.update({ content: replyEphemeral, components: [] });
             return;
         }
 
@@ -1543,26 +1569,24 @@ client.on('interactionCreate', async i => {
         consola.info(`Command: /${cmd} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
 
         if (cmd === 'ankieta_test_start') {
+            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             return manualStartPoll(i);
         }
 
         if (cmd === 'win') {
-            if (!isUserAdmin(i, i.guild)) { // Check admin
+            if (!isUserAdmin(i, i.guild)) { // Tylko admin/leader może przyznawać punkty
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
-
             const embed = new EmbedBuilder()
                 .setTitle('🏆 Przyznawanie Punktów "Psychopaci"')
                 .setDescription('Krok 1: Wybierz rolę, za którą chcesz przyznać punkty.')
                 .setColor(0x2ECC71);
-
             const roleButtons = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+3 pkt)').setStyle(ButtonStyle.Primary),
                     new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+2 pkt)').setStyle(ButtonStyle.Danger),
                     new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+1 pkt)').setStyle(ButtonStyle.Success)
                 );
-
             await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
             return;
         }
@@ -1577,17 +1601,17 @@ client.on('interactionCreate', async i => {
             if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
             if (!voteMessage) return i.reply({ content: '❌ No ongoing vote.', ephemeral: true });
             await i.deferReply({ ephemeral: true });
-            const res = await endVoting(voteMessage, votes, true); // forceEnd = true
+            const res = await endVoting(voteMessage, votes, true);
             if (res) {
-                voteMessage = null; // Clear the active vote message
+                voteMessage = null;
                 return i.editReply('✅ Vote ended.');
             }
             return i.editReply('❌ Failed to end vote.');
         }
 
+        // Komendy kolejki - używają isUserQueueManager
         if (cmd === 'kolejka_start') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-
+            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
             if(!queueChannelId) {
                 return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
@@ -1595,7 +1619,6 @@ client.on('interactionCreate', async i => {
             const queueChannel = await client.channels.fetch(queueChannelId);
             if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
 
-            // Delete old queue message if it exists
             const oldQueueMsgId = loadQueueMessageId();
             if (oldQueueMsgId) {
                 try {
@@ -1606,15 +1629,14 @@ client.on('interactionCreate', async i => {
                     consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
                 }
             }
-            saveQueueMessageId(''); // Clear saved ID
-            queueMessage = null; // Reset global variable
-
-            currentQueue = []; // Reset queue
-            isLobbyLocked = false; // Reset lobby lock status
-            lastPulledUserIds = []; // Reset last pulled users
-            const adminStatus = isUserAdmin(i, i.guild); // Check if interacting user is admin for buttons
+            saveQueueMessageId('');
+            queueMessage = null;
+            currentQueue = [];
+            isLobbyLocked = false;
+            lastPulledUserIds = [];
+            const canManageQueue = isUserQueueManager(i, i.guild); // Sprawdzenie dla przycisku "Pull"
             try {
-                queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(adminStatus)] });
+                queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
                 saveQueueMessageId(queueMessage.id);
                 await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
             } catch (sendError) {
@@ -1623,10 +1645,8 @@ client.on('interactionCreate', async i => {
             }
             return;
         }
-        if (cmd === 'dodaj') { // Admin command to add a user to queue
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
+        if (cmd === 'dodaj') {
+            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             if (!queueMessage) {
                 return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka_start` najpierw.', ephemeral: true });
             }
@@ -1639,30 +1659,22 @@ client.on('interactionCreate', async i => {
             return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
         }
         if (cmd === 'pozycja') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
+            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             if (!queueMessage) {
                 return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka_start` najpierw.', ephemeral: true });
             }
-
             const userToPosition = i.options.getUser('uzytkownik');
-            const desiredPosition = i.options.getInteger('wartosc'); // 1-based
-
+            const desiredPosition = i.options.getInteger('wartosc');
             if (desiredPosition <= 0) {
                 return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
             }
-
-            // Remove user if already in queue
             const existingIndex = currentQueue.indexOf(userToPosition.id);
             if (existingIndex > -1) {
                 currentQueue.splice(existingIndex, 1);
             }
-
-            const targetIndex = desiredPosition - 1; // Convert to 0-based index
-
+            const targetIndex = desiredPosition - 1;
             if (targetIndex >= currentQueue.length) {
-                currentQueue.push(userToPosition.id); // Add to end if position is out of bounds
+                currentQueue.push(userToPosition.id);
                  await updateQueueMessage(i);
                 return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
             } else {
@@ -1671,60 +1683,49 @@ client.on('interactionCreate', async i => {
                 return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
             }
         }
-
         if (cmd === 'kolejka_nastepny') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-
+            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             if (!queueMessage) {
                 return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka_start`.', ephemeral: true });
             }
-
             const liczba = i.options.getInteger('liczba') || 1;
             if (currentQueue.length === 0) {
                 return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
             }
-
-            await i.deferReply({ ephemeral: true }); // Defer for multiple operations
-
+            await i.deferReply({ ephemeral: true });
             const pulledUsersInfo = [];
             let overallMoveStatusMessage = "\n**Status przenoszenia:**\n";
-            const currentPulledIdsThisCommand = []; // Track users pulled in *this* command execution
-
+            const currentPulledIdsThisCommand = [];
             for (let k = 0; k < liczba && currentQueue.length > 0; k++) {
                 const userId = currentQueue.shift();
                 pulledUsersInfo.push(`<@${userId}>`);
                 currentPulledIdsThisCommand.push(userId);
-
                 const moveStatus = await attemptMovePlayerToLobby(i, userId, i.guild);
                 overallMoveStatusMessage += `${moveStatus.startsWith('Gracz') ? '' : `<@${userId}>: `}${moveStatus}\n`;
             }
-            lastPulledUserIds = [...currentPulledIdsThisCommand]; // Overwrite with only the users pulled NOW
-
-
+            lastPulledUserIds = [...currentPulledIdsThisCommand];
             await updateQueueMessage(i);
             const pulledMentions = pulledUsersInfo.join(', ');
-
             await i.editReply({ content: `🎣 Następujące osoby zostały wyciągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
             return;
         }
-
         if (cmd === 'kolejka_wyczysc') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-
+            if (!isUserQueueManager(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             if (!queueMessage) {
                 return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka_start`.', ephemeral: true });
             }
             currentQueue = [];
-            lastPulledUserIds = []; // Clear last pulled users too
+            lastPulledUserIds = [];
             await updateQueueMessage(i);
             return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
         }
 
+        // Komendy punktacji - używają isUserAdmin
         if (cmd === 'wyczysc_ranking_punktow') {
             if (!isUserAdmin(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
-            saveWynikRank({}); // Save an empty object to clear the rank
+            saveWynikRank({});
             consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
             await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
             return;
@@ -1735,30 +1736,25 @@ client.on('interactionCreate', async i => {
             }
             const userToRemovePoints = i.options.getUser('uzytkownik');
             const pointsToRemove = i.options.getInteger('liczba_punktow');
-
             if (pointsToRemove <= 0) {
                 return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
             }
-
             const currentPoints = loadWynikRank();
             const userCurrentPoints = currentPoints[userToRemovePoints.id] || 0;
-
             if (userCurrentPoints === 0) {
                  return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
             }
-
-            const newPoints = Math.max(0, userCurrentPoints - pointsToRemove); // Ensure points don't go below 0
+            const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
             currentPoints[userToRemovePoints.id] = newPoints;
             saveWynikRank(currentPoints);
-
             consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
             return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
         }
 
-        if (cmd === 'ktosus') { // Fun command
+        if (cmd === 'ktosus') {
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
             try {
-                await i.guild.members.fetch(); // Fetch all members to ensure cache is up-to-date
+                await i.guild.members.fetch();
                 const realMembers = i.guild.members.cache.filter(member => !member.user.bot);
                 if (realMembers.size === 0) {
                     return i.reply({ content: 'Nie ma kogo wybrać, sami admini i boty! 😉', ephemeral: true });
@@ -1773,7 +1769,7 @@ client.on('interactionCreate', async i => {
         }
 
         const knownCommands = ['reload', 'wynikirank', 'zakoncz', 'ankieta_test_start', 'kolejka_start', 'dodaj', 'pozycja', 'kolejka_nastepny', 'kolejka_wyczysc', 'win', 'wyczysc_ranking_punktow', 'usun_punkty', 'ktosus', 'ankieta'];
-        if (!knownCommands.includes(cmd)){ // Fallback for unknown commands
+        if (!knownCommands.includes(cmd)){
             consola.warn(`Unknown command /${cmd} attempted by ${i.user.tag}`);
             await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
         }
@@ -1810,7 +1806,7 @@ function formatDuration(durationMs) {
     if (days > 0) parts.push(`${days}d`);
     if (hours > 0) parts.push(`${hours}g`);
     if (minutes > 0) parts.push(`${minutes}m`);
-    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`); // Show seconds if other parts are zero or if duration is less than a minute
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
     return parts.join(', ');
 }
 
@@ -1821,9 +1817,8 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     if (!guild) return;
 
     const member = newState.member || oldState.member;
-    if (!member || member.user.bot) return; // Ignore bots
+    if (!member || member.user.bot) return;
 
-    // Logowanie wejść/wyjść z MONITOROWANEGO kanału
     if (MONITORED_VC_ID && LOG_TEXT_CHANNEL_ID) {
         try {
             const monitoredChannel = await guild.channels.fetch(MONITORED_VC_ID).catch(() => {
@@ -1841,30 +1836,30 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 const userId = member.id;
                 const userAvatar = member.user.displayAvatarURL({ dynamic: true });
 
-                if (newState.channelId === MONITORED_VC_ID && oldState.channelId !== MONITORED_VC_ID) { // User Joins Monitored VC
+                if (newState.channelId === MONITORED_VC_ID && oldState.channelId !== MONITORED_VC_ID) {
                     monitoredVcSessionJoins.set(userId, Date.now());
                     consola.debug(`[VC Log] User ${userTag} joined monitored VC. Stored join time.`);
                     const joinEmbed = new EmbedBuilder()
-                        .setColor(0x00FF00) // Green
+                        .setColor(0x00FF00)
                         .setAuthor({ name: `${userTag} (${userId})`, iconURL: userAvatar })
                         .setDescription(`➡️ <@${userId}> **dołączył/a** do kanału głosowego <#${MONITORED_VC_ID}> (${monitoredChannel.name})`)
                         .setTimestamp()
                         .setFooter({text: `Log Wejścia`});
                     await logChannel.send({ embeds: [joinEmbed] }).catch(e => consola.error("Error sending join log:", e));
                 }
-                else if (oldState.channelId === MONITORED_VC_ID && newState.channelId !== MONITORED_VC_ID) { // User Leaves Monitored VC
+                else if (oldState.channelId === MONITORED_VC_ID && newState.channelId !== MONITORED_VC_ID) {
                     const joinTimestamp = monitoredVcSessionJoins.get(userId);
                     let durationString = "Nieznany (bot mógł być zrestartowany lub użytkownik był już na kanale przy starcie bota)";
                     if (joinTimestamp) {
                         const durationMs = Date.now() - joinTimestamp;
                         durationString = formatDuration(durationMs);
-                        monitoredVcSessionJoins.delete(userId); // Clean up
+                        monitoredVcSessionJoins.delete(userId);
                         consola.debug(`[VC Log] User ${userTag} left monitored VC. Calculated duration: ${durationString}`);
                     } else {
                         consola.warn(`[VC Log] User ${userTag} left monitored VC, but no join timestamp was found.`);
                     }
                     const leaveEmbed = new EmbedBuilder()
-                        .setColor(0xFF0000) // Red
+                        .setColor(0xFF0000)
                         .setAuthor({ name: `${userTag} (${userId})`, iconURL: userAvatar })
                         .setDescription(`⬅️ <@${userId}> **opuścił/a** kanał głosowy <#${MONITORED_VC_ID}> (${monitoredChannel.name})`)
                         .addFields({ name: 'Czas spędzony na kanale', value: durationString, inline: false })
@@ -1878,17 +1873,16 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     }
 
-    // Wysyłanie DM po dołączeniu do WELCOME_DM_VC_ID
     if (WELCOME_DM_VC_ID && newState.channelId === WELCOME_DM_VC_ID && oldState.channelId !== WELCOME_DM_VC_ID) {
         consola.info(`User ${member.user.tag} joined WELCOME_DM_VC_ID (${WELCOME_DM_VC_ID}).`);
         const welcomeDmSentUsers = loadJSON(WELCOME_DM_SENT_USERS_FILE, {});
-        if (!welcomeDmSentUsers[member.id]) { // Send DM only if not sent before
+        if (!welcomeDmSentUsers[member.id]) {
             consola.info(`Attempting to send welcome DM to ${member.user.tag} (first time join).`);
             try {
                 const welcomeMessage = `🎤 **NOWY CREWMATE U PSYCHOPATÓW!** 🎤\n\nSuper, że do nas dołączyłeś!\n\n📌 Jesteśmy ludźmi z zasadami, więc zerknij na <#1346785475729559623>\n📚 Nie grałeś wcześniej na modach? Zajrzyj tutaj: <#1374085202933977240>\n\nZnajdziesz tutaj spis najważniejszych informacji.`;
                 await member.send(welcomeMessage);
                 consola.info(`Sent welcome DM to ${member.user.tag}`);
-                welcomeDmSentUsers[member.id] = true; // Mark as sent
+                welcomeDmSentUsers[member.id] = true;
                 saveJSON(WELCOME_DM_SENT_USERS_FILE, welcomeDmSentUsers);
             } catch (dmError) {
                 consola.warn(`Could not send welcome DM to ${member.user.tag}. They might have DMs disabled. Error: ${dmError.message}`);
@@ -1906,7 +1900,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     const tempVcCategoryId = TEMP_CHANNEL_CATEGORY_ID;
     const tempVcControlPanelCategoryId = TEMP_VC_CONTROL_PANEL_CATEGORY_ID;
 
-    if (creatorChannelId && tempVcCategoryId && tempVcControlPanelCategoryId && newState.channelId === creatorChannelId && newState.channelId !== oldState.channelId) { // User joins creator channel
+    if (creatorChannelId && tempVcCategoryId && tempVcControlPanelCategoryId && newState.channelId === creatorChannelId && newState.channelId !== oldState.channelId) {
         consola.info(`User ${member.user.tag} joined voice creator channel (ID: ${creatorChannelId})`);
         const tempVcCategory = await guild.channels.fetch(tempVcCategoryId).catch(()=>null);
         const controlPanelCategory = await guild.channels.fetch(tempVcControlPanelCategoryId).catch(()=>null);
@@ -1914,7 +1908,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
         if (!tempVcCategory || tempVcCategory.type !== ChannelType.GuildCategory) {
             consola.error(`Temporary voice channel category (ID: ${tempVcCategoryId}) not found or is not a category.`);
-            if (newState.channel) await newState.setChannel(null).catch(e => consola.error("Failed to move user out of creator channel:", e)); // Move user out if category is wrong
+            if (newState.channel) await newState.setChannel(null).catch(e => consola.error("Failed to move user out of creator channel:", e));
             return;
         }
         if (!controlPanelCategory || controlPanelCategory.type !== ChannelType.GuildCategory) {
@@ -1930,66 +1924,62 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 type: ChannelType.GuildVoice,
                 parent: tempVcCategoryId,
                 permissionOverwrites: [
-                    { // Owner permissions
+                    {
                         id: member.id,
                         allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.MoveMembers, PermissionsBitField.Flags.MuteMembers, PermissionsBitField.Flags.DeafenMembers, PermissionsBitField.Flags.PrioritySpeaker, PermissionsBitField.Flags.Stream, PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect],
                         type: OverwriteType.Member
                     },
-                    { // @everyone default (allow connect, can be overridden by lock)
+                    {
                         id: guild.roles.everyone,
-                        allow: [PermissionsBitField.Flags.Connect], // Allow connect by default
+                        allow: [PermissionsBitField.Flags.Connect],
                         type: OverwriteType.Role
                     }
                 ],
             });
             consola.info(`Created temporary VC "${vcName}" (ID: ${newVc.id}) for ${member.user.tag}. Owner: ${member.id}`);
 
-            // Create a unique name for the control text channel
-            let creatorNameForChannel = member.displayName.toLowerCase().replace(/\s+/g, '-'); // Sanitize name
-            creatorNameForChannel = creatorNameForChannel.replace(/[^a-z0-9-]/g, ''); // Remove special chars
-            if (creatorNameForChannel.length > 25) creatorNameForChannel = creatorNameForChannel.substring(0, 25); // Limit length
-            if (creatorNameForChannel.length === 0) creatorNameForChannel = 'uzytkownika'; // Fallback
-            const controlTextChannelName = `Panel-${creatorNameForChannel}`; // Prefix with "Panel-"
+            let creatorNameForChannel = member.displayName.toLowerCase().replace(/\s+/g, '-');
+            creatorNameForChannel = creatorNameForChannel.replace(/[^a-z0-9-]/g, '');
+            if (creatorNameForChannel.length > 25) creatorNameForChannel = creatorNameForChannel.substring(0, 25);
+            if (creatorNameForChannel.length === 0) creatorNameForChannel = 'uzytkownika';
+            const controlTextChannelName = `Panel-${creatorNameForChannel}`;
 
             const controlTextChannel = await guild.channels.create({
                 name: controlTextChannelName,
                 type: ChannelType.GuildText,
                 parent: tempVcControlPanelCategoryId,
                 permissionOverwrites: [
-                    { // Deny @everyone from seeing it
+                    {
                         id: guild.roles.everyone,
                         deny: [PermissionsBitField.Flags.ViewChannel],
                     },
-                    { // Allow owner to see and manage
+                    {
                         id: member.id,
                         allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory],
                     },
-                    { // Allow bot to manage the panel
-                        id: client.user.id, // Bot's ID
-                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.EmbedLinks, PermissionsBitField.Flags.ManageMessages, PermissionsBitField.Flags.ManageChannels], // Added ManageChannels for panel deletion
+                    {
+                        id: client.user.id,
+                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.EmbedLinks, PermissionsBitField.Flags.ManageMessages, PermissionsBitField.Flags.ManageChannels],
                     }
                 ]
             });
             consola.info(`Created control text channel "${controlTextChannelName}" (ID: ${controlTextChannel.id}) for VC ${newVc.id}`);
 
-            await member.voice.setChannel(newVc); // Move user to their new channel
+            await member.voice.setChannel(newVc);
 
-            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id); // isLocked = false initially
+            const controlPanelMessageContent = await getTempVoiceChannelControlPanelMessage(newVc.name, newVc.id, false, client, guild.id);
             consola.info(`[Temp VC] Attempting to send control panel to #${controlTextChannel.name}. Content:`, JSON.stringify(controlPanelMessageContent, null, 2));
             const panelMessage = await controlTextChannel.send(controlPanelMessageContent);
             consola.info(`[Temp VC] Control panel message sent with ID: ${panelMessage.id}. Components length: ${panelMessage.components?.length}`);
 
 
-            temporaryVoiceChannels.set(newVc.id, { // Store channel data
+            temporaryVoiceChannels.set(newVc.id, {
                 ownerId: member.id,
                 vcId: newVc.id,
                 controlTextChannelId: controlTextChannel.id,
-                panelMessageId: panelMessage.id, // Store panel message ID
-                isLocked: false // Initial lock state
+                panelMessageId: panelMessage.id,
+                isLocked: false
             });
-
-            // Usunięto wysyłanie DM po utworzeniu kanału
-            // consola.info(`DM about temporary channel creation for ${member.user.tag} would have been sent here.`);
 
         } catch (error) {
             consola.error(`Failed to create or manage temporary voice channel for ${member.user.tag}:`, error);
@@ -1997,30 +1987,30 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                 await member.send("Przepraszamy, wystąpił błąd podczas tworzenia Twojego kanału tymczasowego. Spróbuj ponownie później lub skontaktuj się z administratorem.").catch(() => {});
             } catch (e) { consola.warn("Failed to send DM about temp channel creation error after initial error.");}
 
-            if (newState.channelId === creatorChannelId) { // If user is still in creator channel after error
+            if (newState.channelId === creatorChannelId) {
                 await member.voice.setChannel(null).catch(e => consola.error("Failed to move user out of creator after error:", e));
             }
         }
         return;
     }
 
-    if (oldState.channelId && temporaryVoiceChannels.has(oldState.channelId)) { // User leaves a temporary VC
+    if (oldState.channelId && temporaryVoiceChannels.has(oldState.channelId)) {
         const oldVc = await guild.channels.fetch(oldState.channelId).catch(() => null);
-        if (oldVc && oldVc.members.filter(m => !m.user.bot).size === 0) { // If the temp VC is now empty (excluding bots)
+        if (oldVc && oldVc.members.filter(m => !m.user.bot).size === 0) {
             const channelData = temporaryVoiceChannels.get(oldState.channelId);
             consola.info(`Temporary VC (ID: ${oldState.channelId}) is empty. Deleting...`);
             try {
                 await oldVc.delete('Temporary voice channel empty');
                 consola.info(`Deleted empty temporary VC (ID: ${oldState.channelId})`);
 
-                if (channelData.controlTextChannelId) { // Delete associated control text channel
+                if (channelData.controlTextChannelId) {
                     const controlTextChannel = await guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
                     if (controlTextChannel) {
                         await controlTextChannel.delete('Associated VC deleted').catch(e => consola.error("Error deleting control text channel:", e));
                         consola.info(`Deleted control text channel (ID: ${channelData.controlTextChannelId})`);
                     }
                 }
-                temporaryVoiceChannels.delete(oldState.channelId); // Remove from map
+                temporaryVoiceChannels.delete(oldState.channelId);
             } catch (error) {
                 consola.error(`Failed to delete temporary voice channel or its control channel (VC ID: ${oldState.channelId}):`, error);
             }
@@ -2040,29 +2030,27 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
         if (isLobbyLocked !== previousLobbyLockedStatus && queueMessage) {
             consola.info(`Lobby lock status changed to: ${isLobbyLocked}. Updating queue panel.`);
-            const pseudoInteractionUser = { id: client.user.id, user: client.user }; // Bot user for internal update
+            const pseudoInteractionUser = { id: client.user.id, user: client.user };
             const pseudoInteraction = { guild: guild, user: pseudoInteractionUser, channel: queueMessage.channel };
             await updateQueueMessage(pseudoInteraction);
         }
 
-        if (newState.channelId === GAME_LOBBY_VOICE_CHANNEL_ID && oldState.channelId !== GAME_LOBBY_VOICE_CHANNEL_ID) { // User joins game lobby
+        if (newState.channelId === GAME_LOBBY_VOICE_CHANNEL_ID && oldState.channelId !== GAME_LOBBY_VOICE_CHANNEL_ID) {
             consola.info(`User ${member.user.tag} joined game lobby (ID: ${GAME_LOBBY_VOICE_CHANNEL_ID}). Current non-bot members: ${lobbyMemberCount}. Lobby locked: ${isLobbyLocked}`);
 
-            if (isLobbyLocked) { // If lobby is locked
-                if (isUserAdmin({user: member.user}, guild)) { // Allow admins
-                    consola.info(`Admin ${member.user.tag} joined locked lobby. Allowing.`);
-                    return; // Do nothing, let them join
+            if (isLobbyLocked) {
+                if (isUserAdmin({user: member.user}, guild)) { // Admini i Liderzy mogą dołączyć do zablokowanego lobby
+                    consola.info(`Admin/Leader ${member.user.tag} joined locked lobby. Allowing.`);
+                    return;
                 }
-
-                // Check if user was pulled from queue
+                 // Mistrz Lobby nie może dołączyć do zablokowanego lobby, chyba że został wyciągnięty z kolejki
                 const wasPulledIndex = lastPulledUserIds.indexOf(member.id);
                 if (wasPulledIndex !== -1) {
                     consola.info(`User ${member.user.tag} was pulled from queue. Allowing to join locked lobby.`);
-                    lastPulledUserIds.splice(wasPulledIndex, 1); // Remove from pulled list after they join
-                    return; // Allow them to join
+                    lastPulledUserIds.splice(wasPulledIndex, 1);
+                    return;
                 }
 
-                // If not admin and not pulled from queue, move to waiting room
                 consola.info(`User ${member.user.tag} tried to join locked lobby without permission. Moving to waiting room.`);
                 try {
                     await member.voice.setChannel(waitingRoomChannel);
