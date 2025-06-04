@@ -54,7 +54,7 @@ const {
     DEFAULT_PANEL_CHANNEL_ID,
     DEFAULT_QUEUE_CHANNEL_ID,
     WEEKLY_MVP_CHANNEL_ID,
-    POLL_PARTICIPANTS_LOG_CHANNEL_ID // Nowa zmienna dla logu uczestników ankiety
+    POLL_PARTICIPANTS_LOG_CHANNEL_ID
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -308,9 +308,14 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('pociagnij')
-                .setDescription('Pobiera graczy z kolejki i próbuje przenieść do lobby (admin/mistrz lobby).')
+                subcommand.setName('pull') // Zmieniona nazwa na 'pull'
+                .setDescription('Pobiera X pierwszych graczy z kolejki (admin/mistrz lobby).')
                 .addIntegerOption(option => option.setName('liczba').setDescription('Liczba osób do pobrania (domyślnie 1).').setRequired(false).setMinValue(1))
+            )
+            .addSubcommand(subcommand => // Nowa subkomenda do pociągania konkretnego gracza
+                subcommand.setName('pull_user') // Nazwa dla pociągania konkretnego użytkownika
+                .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
+                .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
             .addSubcommand(subcommand =>
                 subcommand.setName('wyczysc')
@@ -401,7 +406,7 @@ function getPanelRow() {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('show_wynikirank')
-            .setLabel('Odśwież Ranking 🏆')
+            .setLabel('Odśwież Ranking �')
             .setStyle(ButtonStyle.Primary)
     );
 }
@@ -610,11 +615,10 @@ async function endVoting(message, votesCollection, forceEnd = false) {
                     });
 
                     if (fields.length > 0) {
-                        // Dzielenie pól, jeśli jest ich za dużo dla jednego embedu (limit 25 pól)
                         const MAX_FIELDS_PER_EMBED = 25;
                         for (let i = 0; i < fields.length; i += MAX_FIELDS_PER_EMBED) {
                             const chunk = fields.slice(i, i + MAX_FIELDS_PER_EMBED);
-                            const embedToSend = new EmbedBuilder(participantsEmbed.toJSON()); // Kopiowanie podstawowego embedu
+                            const embedToSend = new EmbedBuilder(participantsEmbed.toJSON());
                             embedToSend.setFields(chunk);
                             await logChannel.send({ embeds: [embedToSend] });
                         }
@@ -736,7 +740,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
 function getQueueEmbed() {
     const embed = new EmbedBuilder()
         .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! �')
+        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
         .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
@@ -1721,14 +1725,16 @@ client.on('interactionCreate', async i => {
                     await updateQueueMessage(i);
                     return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
                 }
-            } else if (subcommandName === 'pociagnij') {
+            } else if (subcommandName === 'pull') { // Zmieniona nazwa na 'pull'
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
-                const liczba = i.options.getInteger('liczba') || 1;
+                const liczba = i.options.getInteger('liczba') || 1; // Pobierz liczbę lub domyślnie 1
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
+
                 await i.deferReply({ ephemeral: true });
                 const pulledUsersInfo = [];
                 let overallMoveStatusMessage = "\n**Status przenoszenia:**\n";
                 const currentPulledIdsThisCommand = [];
+
                 for (let k = 0; k < liczba && currentQueue.length > 0; k++) {
                     const userId = currentQueue.shift();
                     pulledUsersInfo.push(`<@${userId}>`);
@@ -1739,7 +1745,22 @@ client.on('interactionCreate', async i => {
                 lastPulledUserIds = [...currentPulledIdsThisCommand];
                 await updateQueueMessage(i);
                 const pulledMentions = pulledUsersInfo.join(', ');
-                await i.editReply({ content: `🎣 Następujące osoby zostały wyciągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
+                await i.editReply({ content: `🎣 Następujące osoby (${pulledUsersInfo.length}) zostały pociągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
+
+            } else if (subcommandName === 'pull_user') { // Nowa subkomenda
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const targetUser = i.options.getUser('uzytkownik');
+                if (!targetUser) return i.reply({ content: '❌ Musisz wskazać użytkownika.', ephemeral: true });
+
+                const userIndex = currentQueue.indexOf(targetUser.id);
+                if (userIndex === -1) return i.reply({ content: `<@${targetUser.id}> nie znajduje się w kolejce.`, ephemeral: true });
+
+                await i.deferReply({ ephemeral: true });
+                currentQueue.splice(userIndex, 1); // Usuń użytkownika z jego aktualnej pozycji
+                lastPulledUserIds = [targetUser.id]; // Oznacz jako ostatnio pociągniętego
+                const moveStatus = await attemptMovePlayerToLobby(i, targetUser.id, i.guild);
+                await updateQueueMessage(i); // Zaktualizuj wyświetlanie kolejki
+                await i.editReply({ content: `🎣 Pociągnięto <@${targetUser.id}> z kolejki! ${moveStatus}` });
             } else if (subcommandName === 'wyczysc') {
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 currentQueue = [];
