@@ -334,11 +334,11 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('liczba_punktow').setDescription('Liczba punktów do odjęcia.').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('clear') // Zmieniono z 'wyczysc' na 'clear'
+                subcommand.setName('clear')
                 .setDescription('Czyści cały ranking punktów (admin).')
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('among') // Zmieniono z 'pokaz_wszystko' na 'among'
+                subcommand.setName('among')
                 .setDescription('Wyświetla pełny ranking wszystkich graczy.')
             )
             .toJSON()
@@ -356,7 +356,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (cooldown 24h).')
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin, cooldown 24h).')
             .toJSON()
     );
 
@@ -523,7 +523,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! �🎉🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
@@ -633,7 +633,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n� Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
             consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
@@ -713,7 +713,7 @@ function getQueueActionRow(canManageQueue = false) {
 
 async function updateQueueMessage(interaction) {
     if (!queueMessage) {
-        consola.debug('updateQueueMessage: queueMessage is null, skipping update. Use /kolejka_start to initialize.');
+        consola.debug('updateQueueMessage: queueMessage is null, skipping update. Use /kolejka start to initialize.');
         return;
     }
 
@@ -914,12 +914,12 @@ client.once('ready', async () => {
                     await updateQueueMessage(pseudoInteraction);
                     consola.info(`Queue message refreshed (ID: ${queueMessage.id})`);
                 } catch (err) {
-                    consola.warn(`Nie udało się załadować wiadomości kolejki (ID: ${qMsgId}). Prawdopodobnie została usunięta. Użyj /kolejka_start.`);
+                    consola.warn(`Nie udało się załadować wiadomości kolejki (ID: ${qMsgId}). Prawdopodobnie została usunięta. Użyj /kolejka start.`);
                     queueMessage = null;
                     saveQueueMessageId('');
                 }
             } else {
-                consola.info('Brak zapisanej wiadomości kolejki. Użyj /kolejka_start, aby ją utworzyć.');
+                consola.info('Brak zapisanej wiadomości kolejki. Użyj /kolejka start, aby ją utworzyć.');
             }
         }
     } else {
@@ -940,7 +940,7 @@ client.once('ready', async () => {
                 }
             }
         } else {
-            consola.warn("GAME_LOBBY_VOICE_CHANNEL_ID not set, lobby protection disabled.");
+            consola.warn("GAME_LOBBY_VOICE_CHANNEL_ID not set, lobby protection disabled and /ktosus might not work as expected.");
         }
     } catch (error) {
         consola.error(`Nie udało się sprawdzić stanu lobby przy starcie: ${error}`);
@@ -1562,7 +1562,7 @@ client.on('interactionCreate', async i => {
 
         if (!i.isChatInputCommand()) return;
         const commandName = i.commandName;
-        const subcommandName = i.options.getSubcommand(false); // false, aby nie rzucało błędu, jeśli nie ma subkomendy
+        const subcommandName = i.options.getSubcommand(false);
 
         consola.info(`Command: /${commandName}${subcommandName ? ' ' + subcommandName : ''} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
 
@@ -1668,43 +1668,45 @@ client.on('interactionCreate', async i => {
                 return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
             }
         } else if (commandName === 'ranking') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            if (subcommandName === 'dodaj') {
-                const targetUser = i.options.getUser('uzytkownik');
-                const pointsToAdd = i.options.getInteger('liczba_punktow');
-                const reason = i.options.getString('powod') || 'Brak określonego powodu';
-                if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
-                updateWynikRank(targetUser.id, pointsToAdd);
-                const currentPoints = loadWynikRank();
-                const userNewPoints = currentPoints[targetUser.id] || 0;
-                consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
-                return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
-            } else if (subcommandName === 'usun') {
-                const userToRemovePoints = i.options.getUser('uzytkownik');
-                const pointsToRemove = i.options.getInteger('liczba_punktow');
-                if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
-                const currentPointsData = loadWynikRank();
-                const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
-                if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
-                const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
-                currentPointsData[userToRemovePoints.id] = newPoints;
-                saveWynikRank(currentPointsData);
-                consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
-                return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
-            } else if (subcommandName === 'clear') { // Zmieniono na 'clear'
-                saveWynikRank({});
-                consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
-                await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
-            } else if (subcommandName === 'among') { // Zmieniono na 'among'
+            if (subcommandName === 'among') {
                 const fullRankingText = getWynikRanking(false, null, true);
                 const embed = new EmbedBuilder()
                     .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
-                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
+                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText) // Ograniczenie długości opisu
                     .setColor(0xDAA520)
                     .setTimestamp();
-                await i.reply({ embeds: [embed], ephemeral: true });
+                await i.reply({ embeds: [embed] }); // Usunięto ephemeral: true
+            } else {
+                if (!isUserAdmin(i, i.guild)) {
+                    return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+                }
+                if (subcommandName === 'dodaj') {
+                    const targetUser = i.options.getUser('uzytkownik');
+                    const pointsToAdd = i.options.getInteger('liczba_punktow');
+                    const reason = i.options.getString('powod') || 'Brak określonego powodu';
+                    if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
+                    updateWynikRank(targetUser.id, pointsToAdd);
+                    const currentPoints = loadWynikRank();
+                    const userNewPoints = currentPoints[targetUser.id] || 0;
+                    consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
+                    return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
+                } else if (subcommandName === 'usun') {
+                    const userToRemovePoints = i.options.getUser('uzytkownik');
+                    const pointsToRemove = i.options.getInteger('liczba_punktow');
+                    if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
+                    const currentPointsData = loadWynikRank();
+                    const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
+                    if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
+                    const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
+                    currentPointsData[userToRemovePoints.id] = newPoints;
+                    saveWynikRank(currentPointsData);
+                    consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
+                    return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
+                } else if (subcommandName === 'clear') {
+                    saveWynikRank({});
+                    consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
+                    await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
+                }
             }
         } else if (commandName === 'win') {
             if (!isUserAdmin(i, i.guild)) {
@@ -1727,6 +1729,9 @@ client.on('interactionCreate', async i => {
             await registerCommands();
             return i.editReply('✅ Commands reloaded.');
         } else if (commandName === 'ktosus') {
+            if (!isUserAdmin(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            }
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
 
             const cooldowns = loadJSON(KTOSUS_COOLDOWNS_FILE, {});
