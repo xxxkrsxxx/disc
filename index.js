@@ -53,7 +53,8 @@ const {
     DEFAULT_POLL_CHANNEL_ID,
     DEFAULT_PANEL_CHANNEL_ID,
     DEFAULT_QUEUE_CHANNEL_ID,
-    WEEKLY_MVP_CHANNEL_ID
+    WEEKLY_MVP_CHANNEL_ID,
+    POLL_PARTICIPANTS_LOG_CHANNEL_ID // Nowa zmienna dla logu uczestników ankiety
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -87,6 +88,7 @@ checkEnvVar('MONITORED_VC_ID', MONITORED_VC_ID, 'Voice join/leave logging for a 
 checkEnvVar('LOG_TEXT_CHANNEL_ID', LOG_TEXT_CHANNEL_ID, 'Voice join/leave logging channel');
 checkEnvVar('WELCOME_DM_VC_ID', WELCOME_DM_VC_ID, 'Welcome DM on VC join feature');
 checkEnvVar('WEEKLY_MVP_CHANNEL_ID', WEEKLY_MVP_CHANNEL_ID, 'Weekly MVP Announcement Channel (optional, defaults to PANEL_CHANNEL_ID or DEFAULT_PANEL_CHANNEL_ID if not set)');
+checkEnvVar('POLL_PARTICIPANTS_LOG_CHANNEL_ID', POLL_PARTICIPANTS_LOG_CHANNEL_ID, 'Poll Participants Log Channel (optional)');
 
 
 // --- DATA DIRECTORY SETUP ---
@@ -494,8 +496,10 @@ async function endVoting(message, votesCollection, forceEnd = false) {
 
         const countsByTime = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
         const votersByTime = { '19:00': [], '20:00': [], '21:00': [], '22:00': [] };
+        const allVoters = new Set(); // Do zbierania unikalnych ID uczestników
 
         votesCollection.forEach((voteCustomId, userId) => {
+            allVoters.add(userId); // Dodaj każdego głosującego do Setu
             const timeKey = voteCustomId.replace('vote_', '') + ":00";
             if (countsByTime[timeKey] !== undefined) {
                 countsByTime[timeKey]++;
@@ -577,6 +581,31 @@ async function endVoting(message, votesCollection, forceEnd = false) {
 
         await message.channel.send({ embeds: [summaryEmbed] });
         consola.info(`[Voting Ended] Results announced. Winner: ${winnerTime || 'No votes / Tie'}`);
+
+        // Wysyłanie listy uczestników na kanał logów
+        if (POLL_PARTICIPANTS_LOG_CHANNEL_ID && allVoters.size > 0) {
+            try {
+                const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
+                if (logChannel && logChannel.isTextBased()) {
+                    const participantList = Array.from(allVoters).map(userId => `<@${userId}>`).join('\n');
+                    const participantsEmbed = new EmbedBuilder()
+                        .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
+                        .setDescription(participantList.length > 0 ? participantList : "Brak uczestników.")
+                        .setColor(0x7289DA) // Kolor Discorda
+                        .setTimestamp();
+                    await logChannel.send({ embeds: [participantsEmbed] });
+                    consola.info(`[Poll Participants Log] Sent participants list to channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID}.`);
+                } else {
+                    consola.warn(`[Poll Participants Log] Channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID} not found or not a text channel.`);
+                }
+            } catch (logError) {
+                consola.error('[Poll Participants Log] Error sending participants list:', logError);
+            }
+        } else if (allVoters.size === 0) {
+            consola.info('[Poll Participants Log] No participants in the poll to log.');
+        }
+
+
         return true;
 
     } catch (e) {
@@ -633,7 +662,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n� Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
             consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
@@ -671,8 +700,13 @@ function getQueueEmbed() {
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
     if (isLobbyLocked) {
-        embed.addFields({ name: '🔒 Lobby Zamknięte', value: 'Lobby osiągnęło limit graczy. Tylko osoby z kolejki mogą dołączyć.' });
+        let lockReason = "Lobby osiągnęło limit graczy (18+).";
+        if (currentQueue.length > 0) {
+            lockReason = "W kolejce są oczekujący gracze LUB lobby jest pełne (18+).";
+        }
+        embed.addFields({ name: '🔒 Lobby Zamknięte', value: `${lockReason} Tylko osoby z kolejki (lub admini) mogą dołączyć.` });
     }
+
 
     if (currentQueue.length > 0) {
         const queueList = currentQueue.map((userId, index) => `${index + 1}. <@${userId}>`).join('\n');
@@ -721,6 +755,15 @@ async function updateQueueMessage(interaction) {
         const guild = interaction.guild || await client.guilds.fetch(GUILD_ID);
         const userForPermCheck = interaction.user ? interaction.user : (interaction.id ? interaction : { id: OWNER_ID, user: {id: OWNER_ID} });
         const canManageQueue = isUserQueueManager(userForPermCheck, guild);
+
+        if (GAME_LOBBY_VOICE_CHANNEL_ID) {
+            const gameLobbyChannel = await guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
+            if (gameLobbyChannel && gameLobbyChannel.type === ChannelType.GuildVoice) {
+                const lobbyMemberCount = gameLobbyChannel.members.filter(m => !m.user.bot).size;
+                isLobbyLocked = (currentQueue.length > 0 || lobbyMemberCount >= 18);
+            }
+        }
+
         await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
     } catch (error) {
         consola.error('Błąd podczas aktualizacji wiadomości kolejki:', error);
@@ -931,13 +974,9 @@ client.once('ready', async () => {
         if(GAME_LOBBY_VOICE_CHANNEL_ID) {
             const gameLobby = await client.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID);
             if (gameLobby && gameLobby.type === ChannelType.GuildVoice) {
-                const nonBotMembers = gameLobby.members.filter(m => !m.user.bot).size;
-                if (nonBotMembers >= 18) {
-                    isLobbyLocked = true;
-                    consola.info(`Lobby (ID: ${GAME_LOBBY_VOICE_CHANNEL_ID}) jest pełne przy starcie (${nonBotMembers} graczy). Ustawiono isLobbyLocked = true.`);
-                } else {
-                    consola.info(`Lobby (ID: ${GAME_LOBBY_VOICE_CHANNEL_ID}) ma ${nonBotMembers} graczy przy starcie. isLobbyLocked = false.`);
-                }
+                const lobbyMemberCount = gameLobby.members.filter(m => !m.user.bot).size;
+                isLobbyLocked = (currentQueue.length > 0 || lobbyMemberCount >= 18);
+                consola.info(`Lobby (ID: ${GAME_LOBBY_VOICE_CHANNEL_ID}) has ${lobbyMemberCount} players. Queue length: ${currentQueue.length}. isLobbyLocked = ${isLobbyLocked}.`);
             }
         } else {
             consola.warn("GAME_LOBBY_VOICE_CHANNEL_ID not set, lobby protection disabled and /ktosus might not work as expected.");
@@ -1672,7 +1711,7 @@ client.on('interactionCreate', async i => {
                 const fullRankingText = getWynikRanking(false, null, true);
                 const embed = new EmbedBuilder()
                     .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
-                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText) // Ograniczenie długości opisu
+                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
                     .setColor(0xDAA520)
                     .setTimestamp();
                 await i.reply({ embeds: [embed] }); // Usunięto ephemeral: true
@@ -2020,14 +2059,10 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const lobbyMemberCount = gameLobbyChannel.members.filter(m => !m.user.bot).size;
         const previousLobbyLockedStatus = isLobbyLocked;
 
-        if (lobbyMemberCount >= 18) {
-            isLobbyLocked = true;
-        } else {
-            isLobbyLocked = false;
-        }
+        isLobbyLocked = (currentQueue.length > 0 || lobbyMemberCount >= 18);
 
         if (isLobbyLocked !== previousLobbyLockedStatus && queueMessage) {
-            consola.info(`Lobby lock status changed to: ${isLobbyLocked}. Updating queue panel.`);
+            consola.info(`Lobby lock status changed to: ${isLobbyLocked}. Queue length: ${currentQueue.length}, Lobby members: ${lobbyMemberCount}. Updating queue panel.`);
             const pseudoInteractionUser = { id: client.user.id, user: client.user };
             const pseudoInteraction = { guild: guild, user: pseudoInteractionUser, channel: queueMessage.channel };
             await updateQueueMessage(pseudoInteraction);
