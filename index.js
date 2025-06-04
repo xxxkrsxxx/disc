@@ -496,10 +496,10 @@ async function endVoting(message, votesCollection, forceEnd = false) {
 
         const countsByTime = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
         const votersByTime = { '19:00': [], '20:00': [], '21:00': [], '22:00': [] };
-        const allVoters = new Set(); // Do zbierania unikalnych ID uczestników
+        const allVoters = new Set();
 
         votesCollection.forEach((voteCustomId, userId) => {
-            allVoters.add(userId); // Dodaj każdego głosującego do Setu
+            allVoters.add(userId);
             const timeKey = voteCustomId.replace('vote_', '') + ":00";
             if (countsByTime[timeKey] !== undefined) {
                 countsByTime[timeKey]++;
@@ -587,13 +587,41 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             try {
                 const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
                 if (logChannel && logChannel.isTextBased()) {
-                    const participantList = Array.from(allVoters).map(userId => `<@${userId}>`).join('\n');
                     const participantsEmbed = new EmbedBuilder()
                         .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
-                        .setDescription(participantList.length > 0 ? participantList : "Brak uczestników.")
                         .setColor(0x7289DA) // Kolor Discorda
                         .setTimestamp();
-                    await logChannel.send({ embeds: [participantsEmbed] });
+
+                    const fields = [];
+                    const timeSlots = ['19:00', '20:00', '21:00', '22:00'];
+                    const voteCustomIdPrefix = 'vote_';
+
+                    timeSlots.forEach(slot => {
+                        const slotKey = voteCustomIdPrefix + slot.substring(0, 2);
+                        const votersForSlot = [];
+                        votesCollection.forEach((voteId, userId) => {
+                            if (voteId === slotKey) {
+                                votersForSlot.push(`<@${userId}>`);
+                            }
+                        });
+                        if (votersForSlot.length > 0) {
+                            fields.push({ name: `Głosujący na ${slot}:`, value: votersForSlot.join('\n'), inline: true });
+                        }
+                    });
+
+                    if (fields.length > 0) {
+                        // Dzielenie pól, jeśli jest ich za dużo dla jednego embedu (limit 25 pól)
+                        const MAX_FIELDS_PER_EMBED = 25;
+                        for (let i = 0; i < fields.length; i += MAX_FIELDS_PER_EMBED) {
+                            const chunk = fields.slice(i, i + MAX_FIELDS_PER_EMBED);
+                            const embedToSend = new EmbedBuilder(participantsEmbed.toJSON()); // Kopiowanie podstawowego embedu
+                            embedToSend.setFields(chunk);
+                            await logChannel.send({ embeds: [embedToSend] });
+                        }
+                    } else {
+                        participantsEmbed.setDescription("Brak uczestników w tej ankiecie.");
+                        await logChannel.send({ embeds: [participantsEmbed] });
+                    }
                     consola.info(`[Poll Participants Log] Sent participants list to channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID}.`);
                 } else {
                     consola.warn(`[Poll Participants Log] Channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID} not found or not a text channel.`);
@@ -601,8 +629,21 @@ async function endVoting(message, votesCollection, forceEnd = false) {
             } catch (logError) {
                 consola.error('[Poll Participants Log] Error sending participants list:', logError);
             }
-        } else if (allVoters.size === 0) {
-            consola.info('[Poll Participants Log] No participants in the poll to log.');
+        } else if (allVoters.size === 0 && POLL_PARTICIPANTS_LOG_CHANNEL_ID) {
+             try {
+                const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
+                if (logChannel && logChannel.isTextBased()) {
+                    const noParticipantsEmbed = new EmbedBuilder()
+                        .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
+                        .setDescription("Brak uczestników w tej ankiecie.")
+                        .setColor(0x7289DA)
+                        .setTimestamp();
+                    await logChannel.send({ embeds: [noParticipantsEmbed] });
+                    consola.info('[Poll Participants Log] No participants in the poll to log. Sent message to log channel.');
+                }
+            } catch (logError) {
+                consola.error('[Poll Participants Log] Error sending no participants message:', logError);
+            }
         }
 
 
@@ -695,7 +736,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
 function getQueueEmbed() {
     const embed = new EmbedBuilder()
         .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
+        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! �')
         .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
@@ -1714,7 +1755,7 @@ client.on('interactionCreate', async i => {
                     .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
                     .setColor(0xDAA520)
                     .setTimestamp();
-                await i.reply({ embeds: [embed] }); // Usunięto ephemeral: true
+                await i.reply({ embeds: [embed] });
             } else {
                 if (!isUserAdmin(i, i.guild)) {
                     return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
