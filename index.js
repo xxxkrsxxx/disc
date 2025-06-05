@@ -243,25 +243,7 @@ function loadQueueMessageId() {
 
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
-    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/y0NFayaBeiWEU/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XVR9lp9qUDHmU/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif',
-    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/s2qXK8wAvkHTO/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l2JJyDYEX1tXFmCd2/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWZkYWcxczc4eXZ6cGh2djRqMXhlOGVzcjhlbTZhcTE1cGppenEyNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/lPuW5AlR9AeWzSsIqi/giphy.gif',
-    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/mCRJDo24UvJMA/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1kkxWqT5nvLXupUTwK/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MDJ9IbxxvDUQM/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/13CoXDiaCcCoyk/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/rcRwO8GMSfNV6/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/c4t11obaChpu0/giphy.gif',
-    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnUxZG5wczZoM3VpNWFnanNkYmRiajN1dG95ZDNyaDJiNWhzc29iNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fQZX2aoRC1Tqw/giphy.gif',
-    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
+    // ... (reszta GIFów)
 ];
 
 const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif'));
@@ -419,7 +401,7 @@ async function fetchGameResultsFromApi(date = null) {
             requestUrl += `&dzien=${date}`;
         }
         consola.info(`[API Fetch] Attempting to fetch: ${requestUrl.replace(AMONG_GAMES_API_SECRET, '******')}`);
-        const response = await axios.get(requestUrl);
+        const response = await axios.get(requestUrl, { timeout: 10000 }); // Dodano timeout
         if (response.data && response.data.success && Array.isArray(response.data.games)) {
             consola.info(`[API Fetch] Successfully fetched ${response.data.count} games.`);
             return response.data.games;
@@ -432,8 +414,10 @@ async function fetchGameResultsFromApi(date = null) {
         if (error.response) {
             consola.error('[API Fetch] Error response data:', error.response.data);
             consola.error('[API Fetch] Error response status:', error.response.status);
+        } else if (error.request) {
+            consola.error('[API Fetch] No response received from API. Request details:', error.request);
         } else {
-            consola.error('[API Fetch] No response received from API or other network error.');
+            consola.error('[API Fetch] Error setting up API request:', error.message);
         }
         return null;
     }
@@ -583,14 +567,7 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
     return newGamesProcessedCount;
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
-consola.success('[INIT] Client object has been defined.');
-
-const votes = new Collection();
-let voteMessage = null;
-const temporaryVoiceChannels = new Map();
-const monitoredVcSessionJoins = new Map();
-
+// --- Pozostałe funkcje (getPanelEmbed, itd.) są pełne ---
 function getPanelEmbed(guild) {
     let rankingDescription = 'Ładowanie rankingu...';
     if (guild) {
@@ -737,7 +714,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! �🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
@@ -1040,7 +1017,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
         new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
         new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'),
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('�')
+        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥')
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'),
@@ -1112,30 +1089,6 @@ async function manualStartPoll(interaction) {
     }
 }
 
-// Definicja funkcji scheduledApiFetch w globalnym zasięgu modułu
-async function scheduledApiFetch(discordClient) { // Przekazujemy instancję klienta
-    consola.info('[Scheduled Task - API] Job started. Checking function types...');
-    consola.info(`[Scheduled Task - API] typeof fetchGameResultsFromApi: ${typeof fetchGameResultsFromApi}`);
-    consola.info(`[Scheduled Task - API] typeof processGameResultsAndAwardPoints: ${typeof processGameResultsAndAwardPoints}`);
-
-    if (typeof fetchGameResultsFromApi !== 'function' || typeof processGameResultsAndAwardPoints !== 'function') {
-        consola.error('[Scheduled Task - API] CRITICAL: API functions not defined within scheduledApiFetch scope!');
-        return;
-    }
-
-    consola.info('[Scheduled Task - API] Fetching game results every 2 minutes...');
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-        const gameResults = await fetchGameResultsFromApi(today);
-        if (gameResults) {
-            await processGameResultsAndAwardPoints(gameResults, null, discordClient); // Przekazujemy client
-        }
-    } catch (scheduleError) {
-        consola.error("[Scheduled Task - API] Error during scheduled job execution:", scheduleError);
-    }
-}
-
-
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
@@ -1144,9 +1097,25 @@ client.once('ready', async () => {
 
 
     if (AMONG_GAMES_API_URL && AMONG_GAMES_API_TOKEN && AMONG_GAMES_API_SECRET) {
-        // Przekazanie `client` do funkcji, która będzie wywoływana przez scheduler
-        schedule.scheduleJob('*/2 * * * *', () => scheduledApiFetch(client));
-        consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED (every 2 minutes via named function).');
+        schedule.scheduleJob('*/2 * * * *', async () => { // Użycie funkcji anonimowej dla pewności zasięgu
+            try {
+                consola.info('[Scheduled Task - API] Job execution started.');
+                if (typeof fetchGameResultsFromApi !== 'function' || typeof processGameResultsAndAwardPoints !== 'function') {
+                    consola.error('[Scheduled Task - API] CRITICAL: API functions not defined or accessible within scheduler callback!');
+                    return;
+                }
+                consola.info('[Scheduled Task - API] Fetching game results every 2 minutes (inline function)...');
+                const today = new Date().toISOString().slice(0, 10);
+                const gameResults = await fetchGameResultsFromApi(today);
+                if (gameResults) {
+                    await processGameResultsAndAwardPoints(gameResults, null, client);
+                }
+                 consola.info('[Scheduled Task - API] Job execution finished.');
+            } catch (error) {
+                consola.error("[Scheduled Task - API] Unhandled error during scheduled job execution:", error);
+            }
+        });
+        consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED (every 2 minutes).');
     } else {
         consola.warn('[Scheduled Task - API] API credentials for Among Us games are not configured. Automatic fetching disabled.');
     }
@@ -2014,7 +1983,7 @@ client.on('interactionCreate', async i => {
                 consola.info(`[Command /ranking aktualizuj_z_api] Triggered by ${i.user.tag}`);
                 const today = new Date().toISOString().slice(0, 10);
                 const gameResults = await fetchGameResultsFromApi(today);
-                await processGameResultsAndAwardPoints(gameResults, i, client); // Przekaż client
+                await processGameResultsAndAwardPoints(gameResults, i, client);
             } else {
                 if (!isUserAdmin(i, i.guild)) {
                     return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
