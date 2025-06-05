@@ -263,20 +263,13 @@ const KTOSUS_MESSAGES = [
     "Jeśli @nick jest w parze impo z Pacią to wytrwają wspólnie najwyżej do pierwszego spotkania.",
     "Skip na Hozolu to żart. A @nick zrobił/a to na serio- szczerze? Mega sus!",
     "@nick próbuje zrzucić swoje grzechy na Karo. Raczej nie polecamy tego robić, bo to ona pisała bota od rankingu.",
+    "Adamesko znowu krzyczy \"spokój!\", a @nick właśnie planuje cichy sabotaż.",
+    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje \"kurwa\" z szewską pasją.",
     "Kilah może gra raz na sto lat, ale @nick zabija w każdej rundzie. Przypadek?",
     "Zwierzak zna mapy z geoguessr, a @nick zna tylko trasy do najbliższego trupa.",
     "Amae jeszcze nie zdążyła wejść na VC, a @nick już zabił pół załogi.",
     "@nick i kabelki? Przecież to jest daltonista! MEGA SUS!",
-    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu...",
-    "@nick jest mega sus. Powód? Brak. Tak jak podczas niektórych głosowań w lobby.",
-    "Gdyby Among miał horoskop, @nick był/aby Skorpionem, bo to najbardziej zdradliwy znak zodiaku.",
-    "Gdyby słowo SUS miało avatar, wyglądałoby jak @nick.",
-    "@nick zachowuje się jakby miał/a rolę killera... Pewnie dlatego, że ją dostał/a.",
-    "Zaufanie do @nick? To jak granie w Rosyjską ruletkę na sześć naboi.",
-    "W tym świecie są dwie rzeczy pewne: podatki i to, że @nick jest SUS.",
-    "Na pytanie „kto jest SUS?” wszechświat szepcze: @nick.",
-    "@nick jest tak samo podejrzany/a jak ananas na pizzy (nie zachęcamy do dyskusji na temat pizzy hawajskiej)",
-    "@nick nie jest winny/a… tylko dziwnie często się tak jednak składa.",
+    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu..."
 ];
 
 
@@ -370,7 +363,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin, cooldown 24h).')
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 24h).') // Zaktualizowany opis
             .toJSON()
     );
 
@@ -387,12 +380,18 @@ async function registerCommands() {
     }
 }
 
-// --- Pozostałe funkcje bez zmian ---
-// (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
-// (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// (getTempVoiceChannelControlPanelMessage, manualStartPoll, client.once('ready', ...), client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
-// Poniżej skrócone wersje dla kompletności, pełny kod w poprzednich odpowiedziach.
+// --- PANEL EMBED & ROW ---
+// ... (bez zmian)
+// --- ANKIETA ---
+// ... (bez zmian, w tym endVoting z logowaniem uczestników)
+// --- SEKCJA LOGIKI KOLEJKI ---
+// ... (bez zmian w isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
+// --- FUNKCJE POMOCNICZE ---
+// ... (formatDuration)
+// --- BOT SETUP ---
+// ... (bez zmian w client.once('ready', ...))
 
+// Skrócone funkcje, które nie uległy zmianie w tej iteracji
 function getPanelEmbed(guild) {
     let rankingDescription = 'Ładowanie rankingu...';
     if (guild) {
@@ -594,14 +593,13 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         await message.channel.send({ embeds: [summaryEmbed] });
         consola.info(`[Voting Ended] Results announced. Winner: ${winnerTime || 'No votes / Tie'}`);
 
-        // Wysyłanie listy uczestników na kanał logów
         if (POLL_PARTICIPANTS_LOG_CHANNEL_ID && allVoters.size > 0) {
             try {
                 const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
                 if (logChannel && logChannel.isTextBased()) {
                     const participantsEmbed = new EmbedBuilder()
                         .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
-                        .setColor(0x7289DA) // Kolor Discorda
+                        .setColor(0x7289DA)
                         .setTimestamp();
 
                     const fields = [];
@@ -713,7 +711,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n� Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
             consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
@@ -746,7 +744,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
 function getQueueEmbed() {
     const embed = new EmbedBuilder()
         .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! �')
+        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
         .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
@@ -1733,7 +1731,7 @@ client.on('interactionCreate', async i => {
                     await updateQueueMessage(i);
                     return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
                 }
-            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
+            } else if (subcommandName === 'pull') {
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 const liczba = i.options.getInteger('liczba') || 1;
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
@@ -1837,7 +1835,7 @@ client.on('interactionCreate', async i => {
             await registerCommands();
             return i.editReply('✅ Commands reloaded.');
         } else if (commandName === 'ktosus') {
-            if (!isUserAdmin(i, i.guild)) {
+            if (!isUserAdmin(i, i.guild)) { // Zmieniono na isUserAdmin
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
@@ -1874,7 +1872,7 @@ client.on('interactionCreate', async i => {
 
                 // Losowanie wiadomości i wstawianie wzmianki
                 const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
-                const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`); // Użycie globalnego replace, na wszelki wypadek
+                const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`);
 
                 return i.reply(finalMessage);
             } catch (err) {
