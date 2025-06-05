@@ -263,13 +263,20 @@ const KTOSUS_MESSAGES = [
     "Jeśli @nick jest w parze impo z Pacią to wytrwają wspólnie najwyżej do pierwszego spotkania.",
     "Skip na Hozolu to żart. A @nick zrobił/a to na serio- szczerze? Mega sus!",
     "@nick próbuje zrzucić swoje grzechy na Karo. Raczej nie polecamy tego robić, bo to ona pisała bota od rankingu.",
-    "Adamesko znowu krzyczy \"spokój!\", a @nick właśnie planuje cichy sabotaż.",
-    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje \"kurwa\" z szewską pasją.",
     "Kilah może gra raz na sto lat, ale @nick zabija w każdej rundzie. Przypadek?",
     "Zwierzak zna mapy z geoguessr, a @nick zna tylko trasy do najbliższego trupa.",
     "Amae jeszcze nie zdążyła wejść na VC, a @nick już zabił pół załogi.",
     "@nick i kabelki? Przecież to jest daltonista! MEGA SUS!",
-    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu..."
+    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu...",
+    "@nick jest mega sus. Powód? Brak. Tak jak podczas niektórych głosowań w lobby.",
+    "Gdyby Among miał horoskop, @nick był/aby Skorpionem, bo to najbardziej zdradliwy znak zodiaku.",
+    "Gdyby słowo SUS miało avatar, wyglądałoby jak @nick.",
+    "@nick zachowuje się jakby miał/a rolę killera... Pewnie dlatego, że ją dostał/a.",
+    "Zaufanie do @nick? To jak granie w Rosyjską ruletkę na sześć naboi.",
+    "W tym świecie są dwie rzeczy pewne: podatki i to, że @nick jest SUS.",
+    "Na pytanie „kto jest SUS?” wszechświat szepcze: @nick.",
+    "@nick jest tak samo podejrzany/a jak ananas na pizzy (nie zachęcamy do dyskusji na temat pizzy hawajskiej)",
+    "@nick nie jest winny/a… tylko dziwnie często się tak jednak składa.",
 ];
 
 
@@ -711,7 +718,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n� Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
             consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
@@ -782,28 +789,33 @@ function getQueueActionRow(canManageQueue = false) {
                 .setEmoji('❌')
         );
 
-    if (canManageQueue) {
+    if (canManageQueue) { // Przycisk "Pull Następny" będzie zawsze renderowany jeśli użytkownik MA uprawnienia do zarządzania kolejką.
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
-                .setLabel('Pull Następny')
+                .setLabel('Pull')
                 .setStyle(ButtonStyle.Primary)
-                .setEmoji('🎣')
+                .setEmoji('⬆️')
         );
     }
     return row;
 }
 
-async function updateQueueMessage(interaction) {
+async function updateQueueMessage(interaction) { // Interaction może być null dla automatycznych aktualizacji
     if (!queueMessage) {
         consola.debug('updateQueueMessage: queueMessage is null, skipping update. Use /kolejka start to initialize.');
         return;
     }
 
     try {
-        const guild = interaction.guild || await client.guilds.fetch(GUILD_ID);
-        const userForPermCheck = interaction.user ? interaction.user : (interaction.id ? interaction : { id: OWNER_ID, user: {id: OWNER_ID} });
-        const canManageQueue = isUserQueueManager(userForPermCheck, guild);
+        const guild = interaction?.guild || await client.guilds.fetch(GUILD_ID); // Użyj guild z interakcji jeśli dostępne
+        
+        // Dla przycisku Pull, widoczność zależy od tego, czy *jakikolwiek* admin/mistrz istnieje z odpowiednią rolą,
+        // a nie od tego, kto ostatnio kliknął.
+        // Dlatego uproszczono - przycisk jest widoczny, jeśli role są skonfigurowane.
+        // Uprawnienia do faktycznego UŻYCIA przycisku są sprawdzane w handlerze interakcji.
+        const showPullButton = OWNER_ID || LEADER_ROLE_ID || LOBBY_MASTER_ROLE_ID;
+
 
         if (GAME_LOBBY_VOICE_CHANNEL_ID) {
             const gameLobbyChannel = await guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
@@ -813,7 +825,7 @@ async function updateQueueMessage(interaction) {
             }
         }
 
-        await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
+        await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(showPullButton)] });
     } catch (error) {
         consola.error('Błąd podczas aktualizacji wiadomości kolejki:', error);
         if (error.code === 10008) {
@@ -1001,9 +1013,8 @@ client.once('ready', async () => {
                     queueMessage = await queueChannelObj.messages.fetch(qMsgId);
                     consola.info(`Queue message loaded (ID: ${queueMessage.id}). Performing initial update.`);
                     const guild = await client.guilds.fetch(GUILD_ID);
-                    const pseudoUserForPermCheck = { id: OWNER_ID, user: {id: OWNER_ID} };
-                    const pseudoInteraction = { guild: guild, user: pseudoUserForPermCheck, channel: queueMessage.channel };
-                    await updateQueueMessage(pseudoInteraction);
+                    // Zmieniono: przekazujemy null jako interakcję, aby updateQueueMessage samo zdecydowało o widoczności przycisku
+                    await updateQueueMessage({ guild: guild, channel: queueMessage.channel });
                     consola.info(`Queue message refreshed (ID: ${queueMessage.id})`);
                 } catch (err) {
                     consola.warn(`Nie udało się załadować wiadomości kolejki (ID: ${qMsgId}). Prawdopodobnie została usunięta. Użyj /kolejka start.`);
@@ -1731,7 +1742,7 @@ client.on('interactionCreate', async i => {
                     await updateQueueMessage(i);
                     return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
                 }
-            } else if (subcommandName === 'pull') {
+            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 const liczba = i.options.getInteger('liczba') || 1;
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
@@ -1835,7 +1846,7 @@ client.on('interactionCreate', async i => {
             await registerCommands();
             return i.editReply('✅ Commands reloaded.');
         } else if (commandName === 'ktosus') {
-            if (!isUserAdmin(i, i.guild)) { // Zmieniono na isUserAdmin
+            if (!isUserQueueManager(i, i.guild)) { // Zmieniono na isUserQueueManager
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
@@ -1844,7 +1855,7 @@ client.on('interactionCreate', async i => {
             const now = Date.now();
             const userCooldown = cooldowns[i.user.id];
 
-            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION)) {
+            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION) && i.user.id !== OWNER_ID) { // Owner ignoruje cooldown
                 const timeLeft = Math.ceil((KTOSUS_COOLDOWN_DURATION - (now - userCooldown)) / (1000 * 60 * 60));
                 return i.reply({ content: `Musisz poczekać jeszcze około ${timeLeft}h, zanim znowu użyjesz tej komendy.`, ephemeral: true });
             }
@@ -1867,8 +1878,10 @@ client.on('interactionCreate', async i => {
                 const membersArray = Array.from(membersInLobby.values());
                 const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
 
-                cooldowns[i.user.id] = now;
-                saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
+                if (i.user.id !== OWNER_ID) { // Zapisz cooldown tylko jeśli to nie owner
+                    cooldowns[i.user.id] = now;
+                    saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
+                }
 
                 // Losowanie wiadomości i wstawianie wzmianki
                 const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
