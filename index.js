@@ -25,8 +25,7 @@ const {
 
 const fs = require('fs');
 const path = require('path');
-// axios is not needed if API integration is removed
-// const axios = require('axios'); 
+const axios = require('axios'); // Przywrócono axios
 const consola = require('consola');
 const schedule = require('node-schedule');
 
@@ -55,7 +54,10 @@ const {
     DEFAULT_PANEL_CHANNEL_ID,
     DEFAULT_QUEUE_CHANNEL_ID,
     WEEKLY_MVP_CHANNEL_ID,
-    POLL_PARTICIPANTS_LOG_CHANNEL_ID
+    POLL_PARTICIPANTS_LOG_CHANNEL_ID,
+    AMONG_GAMES_API_URL,    // Przywrócono zmienną
+    AMONG_GAMES_API_TOKEN,  // Przywrócono zmienną
+    AMONG_GAMES_API_SECRET  // Przywrócono zmienną
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -90,6 +92,10 @@ checkEnvVar('LOG_TEXT_CHANNEL_ID', LOG_TEXT_CHANNEL_ID, 'Voice join/leave loggin
 checkEnvVar('WELCOME_DM_VC_ID', WELCOME_DM_VC_ID, 'Welcome DM on VC join feature');
 checkEnvVar('WEEKLY_MVP_CHANNEL_ID', WEEKLY_MVP_CHANNEL_ID, 'Weekly MVP Announcement Channel (optional, defaults to PANEL_CHANNEL_ID or DEFAULT_PANEL_CHANNEL_ID if not set)');
 checkEnvVar('POLL_PARTICIPANTS_LOG_CHANNEL_ID', POLL_PARTICIPANTS_LOG_CHANNEL_ID, 'Poll Participants Log Channel (optional)');
+// Walidacja zmiennych API - ustawione na `false` dla isCritical, aby bot mógł działać bez tej funkcji, jeśli nie jest skonfigurowana
+checkEnvVar('AMONG_GAMES_API_URL', AMONG_GAMES_API_URL, 'Among Us Games API URL', false);
+checkEnvVar('AMONG_GAMES_API_TOKEN', AMONG_GAMES_API_TOKEN, 'Among Us Games API Token', false);
+checkEnvVar('AMONG_GAMES_API_SECRET', AMONG_GAMES_API_SECRET, 'Among Us Games API Secret', false);
 
 
 // --- DATA DIRECTORY SETUP ---
@@ -118,6 +124,7 @@ const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
 const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json');
 const WELCOME_DM_SENT_USERS_FILE = path.join(DATA_DIR, 'welcomeDmSentUsers.json');
 const KTOSUS_COOLDOWNS_FILE = path.join(DATA_DIR, 'ktosusCooldowns.json');
+const PROCESSED_GAME_IDS_FILE = path.join(DATA_DIR, 'processedGameIds.json'); // Do śledzenia przetworzonych gier
 
 function loadJSON(filePath, defaultValue = {}) {
     if (!fs.existsSync(filePath)) {
@@ -263,22 +270,13 @@ const KTOSUS_MESSAGES = [
     "Jeśli @nick jest w parze impo z Pacią to wytrwają wspólnie najwyżej do pierwszego spotkania.",
     "Skip na Hozolu to żart. A @nick zrobił/a to na serio- szczerze? Mega sus!",
     "@nick próbuje zrzucić swoje grzechy na Karo. Raczej nie polecamy tego robić, bo to ona pisała bota od rankingu.",
+    "Adamesko znowu krzyczy \"spokój!\", a @nick właśnie planuje cichy sabotaż.",
+    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje \"kurwa\" z szewską pasją.",
     "Kilah może gra raz na sto lat, ale @nick zabija w każdej rundzie. Przypadek?",
     "Zwierzak zna mapy z geoguessr, a @nick zna tylko trasy do najbliższego trupa.",
     "Amae jeszcze nie zdążyła wejść na VC, a @nick już zabił pół załogi.",
     "@nick i kabelki? Przecież to jest daltonista! MEGA SUS!",
-    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu...",
-    "@nick jest mega sus. Powód? Brak. Tak jak podczas niektórych głosowań w lobby.",
-    "Gdyby Among miał horoskop, @nick był/aby Skorpionem, bo to najbardziej zdradliwy znak zodiaku.",
-    "Gdyby słowo SUS miało avatar, wyglądałoby jak @nick.",
-    "@nick zachowuje się jakby miał/a rolę killera... Pewnie dlatego, że ją dostał/a.",
-    "Zaufanie do @nick? To jak granie w Rosyjską ruletkę na sześć naboi.",
-    "W tym świecie są dwie rzeczy pewne: podatki i to, że @nick jest SUS.",
-    "Na pytanie „kto jest SUS?” wszechświat szepcze: @nick.",
-    "@nick jest tak samo podejrzany/a jak ananas na pizzy (nie zachęcamy do dyskusji na temat pizzy hawajskiej)",
-    "@nick nie jest winny/a… tylko dziwnie często się tak jednak składa.",
-    "Adamesko znowu krzyczy 'spokój', a @nick właśnie planuje cichy sabotaż.",
-    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje 'kurwa' z szewską pasją."
+    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu..."
 ];
 
 
@@ -322,7 +320,7 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('pociagnij') // Zmieniono: teraz tylko dla konkretnego gracza
+                subcommand.setName('pociagnij') // Zmieniono z pull_user na pociagnij
                 .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
@@ -357,6 +355,10 @@ async function registerCommands() {
                 subcommand.setName('among')
                 .setDescription('Wyświetla pełny ranking wszystkich graczy.')
             )
+            .addSubcommand(subcommand => // Dodano subkomendę
+                subcommand.setName('aktualizuj_z_api')
+                .setDescription('Pobiera i przetwarza wyniki gier z API (admin).')
+            )
             .toJSON()
     );
 
@@ -372,7 +374,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 24h).') // Zaktualizowany opis
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 24h).')
             .toJSON()
     );
 
@@ -389,558 +391,184 @@ async function registerCommands() {
     }
 }
 
-// --- PANEL EMBED & ROW ---
-// ... (bez zmian)
-// --- ANKIETA ---
-// ... (bez zmian, w tym endVoting z logowaniem uczestników)
-// --- SEKCJA LOGIKI KOLEJKI ---
-// ... (bez zmian w isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// --- FUNKCJE POMOCNICZE ---
-// ... (formatDuration)
-// --- BOT SETUP ---
-// ... (bez zmian w client.once('ready', ...))
-
-// Skrócone funkcje, które nie uległy zmianie w tej iteracji
-function getPanelEmbed(guild) {
-    let rankingDescription = 'Ładowanie rankingu...';
-    if (guild) {
-        const wr = loadWynikRank();
-        let currentMvpId = null;
-        if (MVP_ROLE_ID) {
-            const mvpRole = guild.roles.cache.get(MVP_ROLE_ID);
-            if (mvpRole) {
-                const mvpMember = guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
-                if (mvpMember) currentMvpId = mvpMember.id;
-            }
-        }
-        rankingDescription = getWynikRanking(true, currentMvpId, false);
+// --- API Integration Functions ---
+async function fetchGameResultsFromApi(date = null) {
+    if (!AMONG_GAMES_API_URL || !AMONG_GAMES_API_TOKEN || !AMONG_GAMES_API_SECRET) {
+        consola.error('[API Fetch] API URL, Token, or Secret is not configured. Skipping API fetch.');
+        return null;
     }
-
-    return new EmbedBuilder()
-        .setTitle('Admin Table Stats')
-        .setColor(0xDAA520)
-        .setDescription(rankingDescription);
-}
-
-function getPanelRow() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('show_wynikirank')
-            .setLabel('Odśwież Ranking 🏆')
-            .setStyle(ButtonStyle.Primary)
-    );
-}
-
-function determineWinnerDescriptionForMainEmbed(votesCollection) {
-    const counts = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
-    votesCollection.forEach((voteCustomId, userId) => {
-        const timeKey = voteCustomId.replace('vote_', '') + ":00";
-        if (counts[timeKey] !== undefined) {
-            counts[timeKey]++;
-        }
-    });
-
-    const maxVotes = Math.max(...Object.values(counts));
-    let winner = null;
-    if (maxVotes > 0) {
-        const winners = Object.entries(counts).filter(([, c]) => c === maxVotes).map(([k]) => k);
-        winner = winners.length === 1 ? winners[0] : 'tie';
-    }
-
-    if (winner && winner !== 'tie') {
-        return `Najwięcej psychopatów chce grać o **${winner}**!`;
-    } else if (winner === 'tie') {
-        return 'Nie udało się wybrać jednej godziny. Mamy remis!';
-    } else {
-        return 'Nikt nie zagłosował... Smuteczek.';
-    }
-}
-
-function buildPollEmbeds(currentVotesCollection, isFinal = false) {
-    const mainPollTitle = isFinal ? '🔪 Głosowanie Zakończone! 🔪' : '🔪 AMONG WIECZORKIEM? 🔪';
-    const mainPollDescription = isFinal ? determineWinnerDescriptionForMainEmbed(currentVotesCollection) : 'O której godzinie wejdziesz pokazać, że to Ty jesteś najlepszym graczem?';
-
-    const mainImageEmbed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle(mainPollTitle)
-        .setDescription(mainPollDescription)
-        .setImage(ANKIETA_IMG_URL)
-        .setFooter({ text: isFinal ? "Głosowanie zamknięte." : 'Wybierz godzinę! Kliknij "Pokaż Głosujących", aby zobaczyć kto na co zagłosował.' });
-
-    const counts = { vote_19: 0, vote_20: 0, vote_21: 0, vote_22: 0 };
-    currentVotesCollection.forEach((voteCustomId, userId) => {
-        if (counts[voteCustomId] !== undefined) {
-            counts[voteCustomId]++;
-        }
-    });
-
-    const totalVotes = Object.values(counts).reduce((a, b) => a + b, 0);
-    const resultsTitle = isFinal ? '📊 Ostateczne Wyniki Głosowania 📊' : '🔔 Aktualne wyniki głosowania';
-
-    const resultsEmbed = new EmbedBuilder()
-        .setColor(0xCD5C5C)
-        .setTitle(resultsTitle);
-
-    let resultsDescription = "";
-    if (totalVotes === 0 && !isFinal) {
-        resultsDescription = "Nikt jeszcze nie zagłosował.";
-    } else if (totalVotes === 0 && isFinal) {
-        resultsDescription = "Brak głosów w tej ankiecie.";
-    } else {
-        resultsDescription = `19:00 - **${counts.vote_19}** ${counts.vote_19 === 1 ? 'głos' : 'głosów'}\n` +
-                                 `20:00 - **${counts.vote_20}** ${counts.vote_20 === 1 ? 'głos' : 'głosów'}\n` +
-                                 `21:00 - **${counts.vote_21}** ${counts.vote_21 === 1 ? 'głos' : 'głosów'}\n` +
-                                 `22:00 - **${counts.vote_22}** ${counts.vote_22 === 1 ? 'głos' : 'głosów'}`;
-    }
-    resultsEmbed.setDescription(resultsDescription);
-
-    if (!isFinal) {
-        resultsEmbed.setFooter({text: "Wyniki aktualizują się w czasie rzeczywistym"});
-    }
-    return [mainImageEmbed, resultsEmbed];
-}
-
-async function endVoting(message, votesCollection, forceEnd = false) {
     try {
-        if (!message) {
-            consola.warn("[endVoting] Message object was null.");
-            return false;
+        let requestUrl = `${AMONG_GAMES_API_URL}?token=${AMONG_GAMES_API_TOKEN}&secret=${AMONG_GAMES_API_SECRET}`;
+        if (date) {
+            requestUrl += `&dzien=${date}`; // YYYY-MM-DD
+        }
+        // Można dodać inne parametry, np. &limit=X, jeśli API je wspiera i jest to potrzebne
+
+        consola.info(`[API Fetch] Fetching games from API. URL (secret redacted): ${requestUrl.replace(AMONG_GAMES_API_SECRET, '******')}`);
+        const response = await axios.get(requestUrl);
+
+        if (response.data && response.data.success && Array.isArray(response.data.games)) {
+            consola.info(`[API Fetch] Successfully fetched ${response.data.count} games.`);
+            return response.data.games;
+        } else {
+            consola.warn('[API Fetch] API response was not successful or data format is unexpected:', response.data);
+            return []; // Zwróć pustą tablicę w razie problemów z formatem
+        }
+    } catch (error) {
+        consola.error('[API Fetch] Error fetching game results:', error.message);
+        if (error.response) {
+            consola.error('[API Fetch] Error response data:', error.response.data);
+            consola.error('[API Fetch] Error response status:', error.response.status);
+        }
+        return null; // Zwróć null w przypadku błędu sieciowego/API
+    }
+}
+
+async function processGameResultsAndAwardPoints(gamesToProcess, interaction = null) {
+    if (!gamesToProcess || gamesToProcess.length === 0) {
+        consola.info('[Process Results] No new games to process from API.');
+        if (interaction) await interaction.editReply({ content: 'ℹ️ Brak nowych gier do przetworzenia z API.' }).catch(e => consola.error("Error editing reply for no games:", e));
+        return 0;
+    }
+
+    const processedGameIds = loadJSON(PROCESSED_GAME_IDS_FILE, []);
+    let newGamesProcessedCount = 0;
+    let pointsAwardedMessages = [];
+
+    for (const game of gamesToProcess) {
+        const gameIdentifier = game.gameDbId || game.gameId;
+        if (!gameIdentifier) {
+            consola.warn('[Process Results] Game data missing identifier (gameDbId or gameId):', game);
+            continue;
+        }
+        if (processedGameIds.includes(gameIdentifier.toString())) {
+            consola.info(`[Process Results] Game ${gameIdentifier} already processed. Skipping.`);
+            continue;
         }
 
-        const finalPollEmbeds = buildPollEmbeds(votesCollection, true);
-        const disabledComponents = message.components[0].components.map(b => ButtonBuilder.from(b).setDisabled(true));
-        const disabledRow = new ActionRowBuilder().addComponents(disabledComponents);
+        consola.info(`[Process Results] Processing game ${gameIdentifier}... Winning Team: ${game.winningTeam}`);
+        newGamesProcessedCount++;
+        let gameSummary = [`\n**Gra ${game.lobbyCode || gameIdentifier} (${game.map}):**`];
 
-        await message.edit({ embeds: finalPollEmbeds, components: [disabledRow] });
-        consola.info("[endVoting] Original poll message updated with final results and disabled buttons.");
-
-        const countsByTime = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
-        const votersByTime = { '19:00': [], '20:00': [], '21:00': [], '22:00': [] };
-        const allVoters = new Set();
-
-        votesCollection.forEach((voteCustomId, userId) => {
-            allVoters.add(userId);
-            const timeKey = voteCustomId.replace('vote_', '') + ":00";
-            if (countsByTime[timeKey] !== undefined) {
-                countsByTime[timeKey]++;
-                votersByTime[timeKey].push(`<@${userId}>`);
-            }
-        });
-
-        const maxVotes = Math.max(...Object.values(countsByTime));
-        let winnerTime = null;
-
-        if (maxVotes > 0) {
-            const winningTimes = Object.entries(countsByTime)
-                .filter(([, count]) => count === maxVotes)
-                .map(([time]) => time);
-            if (winningTimes.length === 1) {
-                winnerTime = winningTimes[0];
-            } else {
-                winnerTime = 'tie';
-            }
-        }
-
-        const summaryEmbed = new EmbedBuilder().setColor(0x2ECC71);
-        let gifUrl;
-        let summaryTitle = '🎉 Głosowanie Zakończone! 🎉';
-        let summaryDescription = '';
-
-        if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
-            if (WINNING_POLL_GIFS.length > 0) {
-                gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
-            } else {
-                gifUrl = DEFAULT_POLL_GIF;
+        if (game.players && Array.isArray(game.players)) {
+            let crewmateWinForStats = false;
+            if (game.winningTeam && game.winningTeam.toLowerCase() === "crewmates") {
+                crewmateWinForStats = true;
             }
 
-            if (winnerTime === '19:00') {
-                summaryDescription = "🗳️ Godzina 19:00 wybrana przez Psychopatów!\n\n🧠  Wszyscy wiemy, że to jedyna pora żeby zdążyć zanim zacznie się... coś więcej.\n\n 🕖 Przyjdź punktualnie, bo później czeka Cię kolejka jak w PRL.";
-            } else if (['20:00', '21:00', '22:00'].includes(winnerTime)) {
-                summaryDescription = `🗳️ Większość z was wyjątkowo zagłosowała na ${winnerTime}.${susMessagePart}`;
-            } else {
-                summaryDescription = `Wybrano godzinę **${winnerTime}**! Do zobaczenia w grze!`;
-            }
-            summaryEmbed.setDescription(summaryDescription);
+            game.players.forEach(player => {
+                if (!player.playerId || !player.role) {
+                    consola.warn(`[Process Results] Skipping player due to missing Discord ID (playerId) or role in game ${gameIdentifier}:`, player);
+                    return;
+                }
 
-            if (votersByTime[winnerTime] && votersByTime[winnerTime].length > 0) {
-                summaryEmbed.addFields({ name: `⏰ Obecni o ${winnerTime}:`, value: votersByTime[winnerTime].join(', ') });
-            } else {
-                summaryEmbed.addFields({ name: `⏰ Obecni o ${winnerTime}:`, value: 'Nikt nie potwierdził przybycia na tę godzinę.' });
-            }
-        } else if (winnerTime === 'tie') {
-            summaryTitle = `🤝 Mamy Remis! 🤝`;
-            gifUrl = TIE_POLL_GIF;
-            summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
-            summaryEmbed.setDescription(summaryDescription);
+                let pointsToAward = 0;
+                let awardedForRole = player.role;
+                const playerRoleLower = player.role.toLowerCase();
+                const winningTeamLower = game.winningTeam ? game.winningTeam.toLowerCase() : "";
 
-            let tieFields = [];
-            Object.entries(countsByTime).forEach(([time, count]) => {
-                if (count === maxVotes && maxVotes > 0) {
-                    tieFields.push({
-                        name: `Remis na ${time}: ${count} głosów`,
-                        value: votersByTime[time].length > 0 ? votersByTime[time].join(', ') : 'Brak głosujących na tę opcję.',
-                        inline: true
-                    });
+                if (player.isWinner === 1) {
+                    if (playerRoleLower.includes('crewmate') && winningTeamLower === 'crewmates') {
+                        pointsToAward = 100;
+                    } else if (playerRoleLower.includes('impostor') && winningTeamLower === 'impostors') {
+                        pointsToAward = 200;
+                    } else if ((playerRoleLower.includes('lover') || (player.modifiers && player.modifiers.some(mod => mod.toLowerCase().includes('lover')))) && (winningTeamLower === 'lovers' || player.isWinner === 1)) {
+                        pointsToAward = 300; // Specjalna punktacja dla Lovers
+                        awardedForRole = `Lover (${player.role})`;
+                    } else if (!playerRoleLower.includes('crewmate') && !playerRoleLower.includes('impostor') && !playerRoleLower.includes('lover')) {
+                        // Zakładamy, że to inna rola neutralna
+                        pointsToAward = 300;
+                        awardedForRole = `Neutral (${player.role})`;
+                    }
+                }
+
+
+                if (pointsToAward > 0) {
+                    updateWynikRank(player.playerId.toString(), pointsToAward);
+                    const message = `Przyznano ${pointsToAward} pkt dla <@${player.playerId}> (Rola: ${awardedForRole}, Wygrana: Tak)`;
+                    consola.info(`[Process Results] ${message}`);
+                    gameSummary.push(message);
                 }
             });
-            if (tieFields.length > 0) summaryEmbed.addFields(tieFields);
 
+            if (crewmateWinForStats && !game.winningTeam.toLowerCase().includes('lover')) { // Nie inkrementuj jeśli Lovers wygrali jako osobna drużyna
+                incrementCrewmateWins();
+            }
         } else {
-            summaryTitle = '😥 Nikt nie zagłosował... 😥';
-            gifUrl = NO_VOTES_GIF || DEFAULT_POLL_GIF;
-            summaryDescription = 'Może następnym razem?';
-            summaryEmbed.setDescription(summaryDescription);
+            consola.warn(`[Process Results] No player data in game ${gameIdentifier}`);
         }
 
-        summaryEmbed.setTitle(summaryTitle);
-        if (gifUrl) {
-            summaryEmbed.setImage(gifUrl);
+        processedGameIds.push(gameIdentifier.toString());
+        if (gameSummary.length > 1) {
+            pointsAwardedMessages.push(...gameSummary);
         }
+    }
+    saveJSON(PROCESSED_GAME_IDS_FILE, processedGameIds);
+    consola.info(`[Process Results] Finished processing. ${newGamesProcessedCount} new games logged for points.`);
 
-
-        await message.channel.send({ embeds: [summaryEmbed] });
-        consola.info(`[Voting Ended] Results announced. Winner: ${winnerTime || 'No votes / Tie'}`);
-
-        if (POLL_PARTICIPANTS_LOG_CHANNEL_ID && allVoters.size > 0) {
-            try {
-                const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
-                if (logChannel && logChannel.isTextBased()) {
-                    const participantsEmbed = new EmbedBuilder()
-                        .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
-                        .setColor(0x7289DA)
-                        .setTimestamp();
-
-                    const fields = [];
-                    const timeSlots = ['19:00', '20:00', '21:00', '22:00'];
-                    const voteCustomIdPrefix = 'vote_';
-
-                    timeSlots.forEach(slot => {
-                        const slotKey = voteCustomIdPrefix + slot.substring(0, 2);
-                        const votersForSlot = [];
-                        votesCollection.forEach((voteId, userId) => {
-                            if (voteId === slotKey) {
-                                votersForSlot.push(`<@${userId}>`);
-                            }
-                        });
-                        if (votersForSlot.length > 0) {
-                            fields.push({ name: `Głosujący na ${slot}:`, value: votersForSlot.join('\n'), inline: true });
-                        }
-                    });
-
-                    if (fields.length > 0) {
-                        const MAX_FIELDS_PER_EMBED = 25;
-                        for (let i = 0; i < fields.length; i += MAX_FIELDS_PER_EMBED) {
-                            const chunk = fields.slice(i, i + MAX_FIELDS_PER_EMBED);
-                            const embedToSend = new EmbedBuilder(participantsEmbed.toJSON());
-                            embedToSend.setFields(chunk);
-                            await logChannel.send({ embeds: [embedToSend] });
-                        }
-                    } else {
-                        participantsEmbed.setDescription("Brak uczestników w tej ankiecie.");
-                        await logChannel.send({ embeds: [participantsEmbed] });
-                    }
-                    consola.info(`[Poll Participants Log] Sent participants list to channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID}.`);
-                } else {
-                    consola.warn(`[Poll Participants Log] Channel ID ${POLL_PARTICIPANTS_LOG_CHANNEL_ID} not found or not a text channel.`);
+    if (interaction) {
+        if (newGamesProcessedCount > 0) {
+            let replyMessage = `✅ Pomyślnie przetworzono ${newGamesProcessedCount} nowych gier z API.`;
+            if (pointsAwardedMessages.length > 0) {
+                replyMessage += "\n**Podsumowanie przyznanych punktów:**" + pointsAwardedMessages.join('\n');
+                if (replyMessage.length > 1900) {
+                    replyMessage = replyMessage.substring(0, 1900) + "\n... (więcej informacji w logach konsoli)";
                 }
-            } catch (logError) {
-                consola.error('[Poll Participants Log] Error sending participants list:', logError);
+            } else {
+                replyMessage += "\nNie przyznano żadnych punktów w tych grach na podstawie obecnych zasad.";
             }
-        } else if (allVoters.size === 0 && POLL_PARTICIPANTS_LOG_CHANNEL_ID) {
-             try {
-                const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
-                if (logChannel && logChannel.isTextBased()) {
-                    const noParticipantsEmbed = new EmbedBuilder()
-                        .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
-                        .setDescription("Brak uczestników w tej ankiecie.")
-                        .setColor(0x7289DA)
-                        .setTimestamp();
-                    await logChannel.send({ embeds: [noParticipantsEmbed] });
-                    consola.info('[Poll Participants Log] No participants in the poll to log. Sent message to log channel.');
-                }
-            } catch (logError) {
-                consola.error('[Poll Participants Log] Error sending no participants message:', logError);
-            }
-        }
-
-
-        return true;
-
-    } catch (e) {
-        consola.error('Error ending voting:', e);
-        if (message.channel && typeof message.channel.send === 'function') {
-            try {
-                await message.channel.send("Wystąpił błąd podczas kończenia głosowania. Sprawdź logi.");
-            } catch (sendError) {
-                consola.error("Additionally, failed to send error message to channel:", sendError);
-            }
-        }
-        return false;
-    }
-}
-
-let currentQueue = [];
-let queueMessage = null;
-let lastPulledUserIds = [];
-let isLobbyLocked = false;
-
-function isUserAdmin(interactionOrUser, guild) {
-    const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
-    if (userId === OWNER_ID) return true;
-    if (!guild) {
-        consola.warn("[isUserAdmin] Guild object is undefined for admin check.");
-        return false;
-    }
-    const member = guild.members.cache.get(userId);
-    return member && member.roles.cache.has(LEADER_ROLE_ID);
-}
-
-function isUserQueueManager(interactionOrUser, guild) {
-    if (isUserAdmin(interactionOrUser, guild)) return true;
-
-    if (!LOBBY_MASTER_ROLE_ID) return false;
-
-    const userId = interactionOrUser.user ? interactionOrUser.user.id : interactionOrUser.id;
-    if (!guild) {
-        consola.warn("[isUserQueueManager] Guild object is undefined for queue manager check.");
-        return false;
-    }
-    const member = guild.members.cache.get(userId);
-    return member && member.roles.cache.has(LOBBY_MASTER_ROLE_ID);
-}
-
-
-async function attemptMovePlayerToLobby(interaction, userId, guild) {
-    let moveStatusMessage = '';
-    try {
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (!member) {
-            moveStatusMessage = `Nie znaleziono gracza <@${userId}> na serwerze.`;
-            return moveStatusMessage;
-        }
-
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
-        try {
-            await member.send(dmMessage);
-            consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
-        } catch (dmError) {
-            consola.warn(`[Queue Pull] Could not send DM to ${member.user.tag} (${userId}). They might have DMs disabled. Error: ${dmError.message}`);
-        }
-
-        if (member.voice.channelId && member.voice.channelId === WAITING_ROOM_VOICE_CHANNEL_ID) {
-            await member.voice.setChannel(GAME_LOBBY_VOICE_CHANNEL_ID);
-            moveStatusMessage = `Gracz <@${userId}> został przeniesiony z poczekalni do lobby gry.`;
-        } else if (member.voice.channelId) {
-            moveStatusMessage = `Gracz <@${userId}> jest na innym kanale głosowym (<#${member.voice.channelId}>), nie w poczekalni. Nie został przeniesiony, ale został powiadomiony.`;
+            await interaction.editReply({ content: replyMessage }).catch(e => consola.error("Error editing reply for processed games:", e));
         } else {
-            moveStatusMessage = `Gracz <@${userId}> nie jest na żadnym kanale głosowym, ale został powiadomiony.`;
+            await interaction.editReply({ content: 'ℹ️ Brak nowych gier do przetworzenia z API (mogły zostać już wcześniej przetworzone).'}).catch(e => consola.error("Error editing reply for no new games:", e));
         }
-    } catch (error) {
-        consola.error(`[MovePlayer] Error moving user ${userId} or sending DM:`, error);
-        if (error.code === 50013) {
-            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> - brak uprawnień bota do przenoszenia.`;
-        } else if (error.code === 50001) {
-            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> - brak dostępu bota do kanału.`;
-        } else {
-            moveStatusMessage = `Nie udało się przenieść gracza <@${userId}> (błąd: ${error.message}).`;
-        }
-    }
-    return moveStatusMessage;
-}
-
-
-function getQueueEmbed() {
-    const embed = new EmbedBuilder()
-        .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
-        .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
-        .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
-
-    if (isLobbyLocked) {
-        let lockReason = "Lobby osiągnęło limit graczy (18+).";
-        if (currentQueue.length > 0) {
-            lockReason = "W kolejce są oczekujący gracze LUB lobby jest pełne (18+).";
-        }
-        embed.addFields({ name: '🔒 Lobby Zamknięte', value: `${lockReason} Tylko osoby z kolejki (lub admini) mogą dołączyć.` });
+    } else if (newGamesProcessedCount > 0 && PANEL_CHANNEL_ID) {
+        // Można rozważyć wysłanie skróconego logu na kanał, jeśli nie było interakcji
+        // Np. client.channels.cache.get(PANEL_CHANNEL_ID)?.send(`🤖 Automatycznie przetworzono ${newGamesProcessedCount} gier z API.`);
     }
 
-
-    if (currentQueue.length > 0) {
-        const queueList = currentQueue.map((userId, index) => `${index + 1}. <@${userId}>`).join('\n');
-        embed.addFields({ name: 'Aktualnie w kolejce:', value: queueList });
-    } else {
-        embed.addFields({ name: 'Aktualnie w kolejce:', value: 'Kolejka jest pusta!' });
-    }
-    embed.setFooter({ text: `Queue Bot | ${new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` });
-    return embed;
-}
-
-function getQueueActionRow(canManageQueue = false) {
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('queue_join')
-                .setLabel('Dołącz')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅'),
-            new ButtonBuilder()
-                .setCustomId('queue_leave')
-                .setLabel('Opuść')
-                .setStyle(ButtonStyle.Danger)
-                .setEmoji('❌')
-        );
-
-    if (canManageQueue) { // Przycisk "Pull Następny" będzie zawsze renderowany jeśli użytkownik MA uprawnienia do zarządzania kolejką.
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId('queue_pull_next')
-                .setLabel('Pull')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('⬆️')
-        );
-    }
-    return row;
-}
-
-async function updateQueueMessage(interaction) { // Interaction może być null dla automatycznych aktualizacji
-    if (!queueMessage) {
-        consola.debug('updateQueueMessage: queueMessage is null, skipping update. Use /kolejka start to initialize.');
-        return;
-    }
-
-    try {
-        const guild = interaction?.guild || await client.guilds.fetch(GUILD_ID); // Użyj guild z interakcji jeśli dostępne
-        
-        // Dla przycisku Pull, widoczność zależy od tego, czy *jakikolwiek* admin/mistrz istnieje z odpowiednią rolą,
-        // a nie od tego, kto ostatnio kliknął.
-        // Dlatego uproszczono - przycisk jest widoczny, jeśli role są skonfigurowane.
-        // Uprawnienia do faktycznego UŻYCIA przycisku są sprawdzane w handlerze interakcji.
-        const showPullButton = OWNER_ID || LEADER_ROLE_ID || LOBBY_MASTER_ROLE_ID;
-
-
-        if (GAME_LOBBY_VOICE_CHANNEL_ID) {
-            const gameLobbyChannel = await guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
-            if (gameLobbyChannel && gameLobbyChannel.type === ChannelType.GuildVoice) {
-                const lobbyMemberCount = gameLobbyChannel.members.filter(m => !m.user.bot).size;
-                isLobbyLocked = (currentQueue.length > 0 || lobbyMemberCount >= 18);
-            }
-        }
-
-        await queueMessage.edit({ embeds: [getQueueEmbed()], components: [getQueueActionRow(showPullButton)] });
-    } catch (error) {
-        consola.error('Błąd podczas aktualizacji wiadomości kolejki:', error);
-        if (error.code === 10008) {
-            consola.warn('Wiadomość panelu kolejki została usunięta. Wyczyszczono ID.');
-            queueMessage = null;
-            saveQueueMessageId('');
-        }
-    }
-}
-
-async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, client, guildId) {
-    const guild = await client.guilds.fetch(guildId);
-    const voiceChannel = await guild.channels.fetch(vcId).catch(() => null);
-    let currentLimit = 0;
-    if (voiceChannel) {
-        currentLimit = voiceChannel.userLimit;
-    }
-
-    const embed = new EmbedBuilder()
-        .setTitle(`⚙️ Panel Zarządzania Kanałem: ${vcName}`)
-        .setDescription(`Status: ${isLocked ? '🔒 Zablokowany' : '🔓 Otwarty'}\nLimit miejsc: ${currentLimit === 0 ? 'Brak' : currentLimit}`)
-        .setColor('#3498DB')
-        .setFooter({text: `Kanał głosowy: ${vcName} (ID: ${vcId})`});
-
-    const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
-        new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
-        new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'),
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥')
-    );
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'),
-        new ButtonBuilder().setCustomId(`tempvc_reject_select_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Danger).setEmoji('🚫'),
-        new ButtonBuilder().setCustomId(`tempvc_kick_select_${vcId}`).setLabel('Wyrzuć').setStyle(ButtonStyle.Danger).setEmoji('👟')
-    );
-
-    const components = [row1];
-    if (row2.components.length > 0) {
-        components.push(row2);
-    }
-    consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
-    return { embeds: [embed], components: components };
-}
-
-
-// --- BOT SETUP ---
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
-const votes = new Collection();
-let voteMessage = null;
-const temporaryVoiceChannels = new Map();
-const monitoredVcSessionJoins = new Map();
-
-
-async function manualStartPoll(interaction) {
-    if (!isUserAdmin(interaction, interaction.guild)) {
-        return interaction.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-    }
-
-    try {
-        const pollChannelId = CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID;
-        if (!pollChannelId) {
-             consola.error('[Manual Poll Start] Brak skonfigurowanego CHANNEL_ID dla ankiet.');
-             return interaction.reply({ content: '❌ Kanał dla ankiet nie jest skonfigurowany.', ephemeral: true });
-        }
-        const pollChannel = await client.channels.fetch(pollChannelId);
-
-        if (!pollChannel) {
-            consola.error(`[Manual Poll Start] Nie znaleziono kanału dla ankiet (ID: ${pollChannelId})`);
-            return interaction.reply({ content: '❌ Nie znaleziono kanału dla ankiet.', ephemeral: true });
-        }
-
-        votes.clear();
-        consola.info('[Manual Poll Start] Lokalna kolekcja głosów (votes) wyczyszczona.');
-
-        const initialPollEmbeds = buildPollEmbeds(votes);
-
-        const pollRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('vote_20').setEmoji('<:catJAM:1369714552916148224>').setLabel('Będę! (20:00)').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('vote_21').setEmoji('<:VibingRabbit:1369714461568663784>').setLabel('Będę, ale później (21:00)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('poll_show_voters').setEmoji('👀').setLabel('Pokaż Głosujących').setStyle(ButtonStyle.Secondary)
-        );
-
-        let contentMessage = '';
-        if (ROLE_ID) {
-            contentMessage = `<@&${ROLE_ID}>`;
-        }
-
-        if (voteMessage) {
+    // Odświeżenie panelu rankingu, jeśli były zmiany
+    if (newGamesProcessedCount > 0 && PANEL_CHANNEL_ID) {
+        const panelCh = await client.channels.fetch(PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID).catch(() => null);
+        const panelMessageId = loadPanelMessageId();
+        if (panelCh && panelMessageId) {
             try {
-                await voteMessage.delete();
-                consola.info('[Manual Poll Start] Stara wiadomość ankiety (voteMessage) usunięta.');
+                const panelMsgToEdit = await panelCh.messages.fetch(panelMessageId);
+                const guild = await client.guilds.fetch(GUILD_ID);
+                await panelMsgToEdit.edit({ embeds: [getPanelEmbed(guild)], components: [getPanelRow()] });
+                consola.info("[API Process] Ranking panel updated after processing API games.");
             } catch (e) {
-                consola.warn('[Manual Poll Start] Nie udało się usunąć starej voteMessage (mogła już nie istnieć).');
+                consola.error("[API Process] Failed to update ranking panel after API processing:", e);
             }
         }
-
-        voteMessage = await pollChannel.send({ content: contentMessage, embeds: initialPollEmbeds, components: [pollRow] });
-        consola.info(`[Manual Poll Start] Ankieta godzinowa została wysłana na kanał ${pollChannel.name} (ID: ${voteMessage.id})`);
-        await interaction.reply({ content: `✅ Ankieta testowa uruchomiona w <#${pollChannel.id}>!`, ephemeral: true });
-
-    } catch (e) {
-        consola.error('[Manual Poll Start] Error starting manual poll:', e);
-        await interaction.reply({ content: '❌ Wystąpił błąd podczas uruchamiania ankiety testowej.', ephemeral: true });
     }
+    return newGamesProcessedCount;
 }
 
+// --- Pozostałe funkcje bez zmian ---
+// (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
+// (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
+// (getTempVoiceChannelControlPanelMessage, manualStartPoll)
 
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
 
     await registerCommands();
+
+    // Automatyczne pobieranie i przetwarzanie wyników gier co 5 minut
+    if (AMONG_GAMES_API_URL && AMONG_GAMES_API_TOKEN && AMONG_GAMES_API_SECRET) {
+        schedule.scheduleJob('*/5 * * * *', async () => { // Co 5 minut
+            consola.info('[Scheduled Task - API] Fetching game results...');
+            const today = new Date().toISOString().slice(0, 10); // Format YYYY-MM-DD
+            const gameResults = await fetchGameResultsFromApi(today); // Pobierz gry z dzisiaj
+            if (gameResults) {
+                await processGameResultsAndAwardPoints(gameResults);
+            }
+        });
+         consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED.');
+    } else {
+        consola.warn('[Scheduled Task - API] API credentials for Among Us games are not configured. Automatic fetching disabled.');
+    }
+
 
     const panelChannelIdToUse = PANEL_CHANNEL_ID || DEFAULT_PANEL_CHANNEL_ID;
     if (panelChannelIdToUse) {
@@ -1015,7 +643,6 @@ client.once('ready', async () => {
                     queueMessage = await queueChannelObj.messages.fetch(qMsgId);
                     consola.info(`Queue message loaded (ID: ${queueMessage.id}). Performing initial update.`);
                     const guild = await client.guilds.fetch(GUILD_ID);
-                    // Zmieniono: przekazujemy null jako interakcję, aby updateQueueMessage samo zdecydowało o widoczności przycisku
                     await updateQueueMessage({ guild: guild, channel: queueMessage.channel });
                     consola.info(`Queue message refreshed (ID: ${queueMessage.id})`);
                 } catch (err) {
@@ -1101,7 +728,7 @@ client.once('ready', async () => {
         } catch (e) { consola.error('Error scheduling vote end at 16:00:', e); }
     });
 
-    schedule.scheduleJob('0 0 * * *', resetPollBonusData); // Zmieniono na codziennie o północy
+    schedule.scheduleJob('0 0 * * *', resetPollBonusData);
 
     schedule.scheduleJob('5 9 * * 1', async () => {
         try {
@@ -1744,7 +1371,7 @@ client.on('interactionCreate', async i => {
                     await updateQueueMessage(i);
                     return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
                 }
-            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
+            } else if (subcommandName === 'pull') {
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 const liczba = i.options.getInteger('liczba') || 1;
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
@@ -2193,4 +1820,4 @@ function attemptLogin(retries = 5) {
         }
     });
 }
-attemptLogin();
+attemptLogin
