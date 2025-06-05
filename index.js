@@ -94,7 +94,7 @@ checkEnvVar('POLL_PARTICIPANTS_LOG_CHANNEL_ID', POLL_PARTICIPANTS_LOG_CHANNEL_ID
 
 // --- DATA DIRECTORY SETUP ---
 const DATA_DIR = process.env.RENDER_DISK_MOUNT_PATH || path.join(__dirname, 'bot_data');
-console.log(`[INIT] Data directory is set to: ${DATA_DIR}`); // Useful for debugging persistent storage
+console.log(`[INIT] Data directory is set to: ${DATA_DIR}`);
 
 if (!fs.existsSync(DATA_DIR)){
     try {
@@ -237,7 +237,7 @@ function loadQueueMessageId() {
 
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
-    // ... (reszta GIFów, jak w poprzedniej wersji)
+    // ... (reszta GIFów)
 ];
 
 const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif'));
@@ -279,6 +279,7 @@ async function registerCommands() {
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
 
+    // Grupa komend /ankieta
     cmds.push(
         new SlashCommandBuilder().setName('ankieta').setDescription('Zarządzanie ankietami.')
             .addSubcommand(subcommand =>
@@ -292,6 +293,7 @@ async function registerCommands() {
             .toJSON()
     );
 
+    // Grupa komend /kolejka
     cmds.push(
         new SlashCommandBuilder().setName('kolejka').setDescription('Zarządzanie kolejką do gry.')
             .addSubcommand(subcommand =>
@@ -309,8 +311,13 @@ async function registerCommands() {
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz, którego pozycję chcesz ustawić.').setRequired(true))
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
-            .addSubcommand(subcommand => // Zmieniono: teraz pociąga konkretnego gracza
-                subcommand.setName('pociagnij')
+            .addSubcommand(subcommand =>
+                subcommand.setName('pull') // Zmieniono nazwę na 'pull' i logikę na pociąganie X osób
+                .setDescription('Pobiera X pierwszych graczy z kolejki (admin/mistrz lobby).')
+                .addIntegerOption(option => option.setName('liczba').setDescription('Liczba osób do pobrania (domyślnie 1).').setRequired(false).setMinValue(1))
+            )
+            .addSubcommand(subcommand => // Dodano z powrotem pull_user
+                subcommand.setName('pull_user')
                 .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
@@ -321,6 +328,7 @@ async function registerCommands() {
             .toJSON()
     );
 
+    // Grupa komend /ranking
     cmds.push(
         new SlashCommandBuilder().setName('ranking').setDescription('Zarządzanie rankingiem punktów.')
             .addSubcommand(subcommand =>
@@ -347,6 +355,7 @@ async function registerCommands() {
             .toJSON()
     );
 
+    // Komenda /win
     cmds.push(
         new SlashCommandBuilder()
             .setName('win')
@@ -354,6 +363,7 @@ async function registerCommands() {
             .toJSON()
     );
 
+    // Komenda /ktosus
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
@@ -374,23 +384,11 @@ async function registerCommands() {
     }
 }
 
-// --- PANEL EMBED & ROW ---
-// ... (bez zmian)
-// --- ANKIETA ---
-// ... (bez zmian, w tym endVoting z logowaniem uczestników)
-// --- SEKCJA LOGIKI KOLEJKI ---
-// ... (bez zmian w isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// --- FUNKCJE POMOCNICZE ---
-// ... (formatDuration)
-// --- BOT SETUP ---
-// ... (bez zmian w client.once('ready', ...))
-
 // --- Pozostałe funkcje bez zmian ---
-// (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
-// (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// (getTempVoiceChannelControlPanelMessage, manualStartPoll, client.once('ready', ...), client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
-// Skrócę te funkcje, ponieważ nie uległy zmianie w tej iteracji, aby odpowiedź była krótsza.
-// Pełny kod tych funkcji znajduje się w poprzednich wersjach Canvas.
+// ... (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
+// ... (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
+// ... (getTempVoiceChannelControlPanelMessage, manualStartPoll, client.once('ready', ...), client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
+// Poniżej skrócone wersje dla kompletności, pełny kod w poprzednich odpowiedziach.
 
 function getPanelEmbed(guild) {
     let rankingDescription = 'Ładowanie rankingu...';
@@ -538,7 +536,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! �🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
@@ -711,7 +709,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
             return moveStatusMessage;
         }
 
-        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n� Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
+        const dmMessage = `📢 Właśnie zwolnił się slot na Amonga!\n\n🔪 Wbijaj na serwer [PSYCHOPACI](https://discord.gg/psychopaci)\n\n⏰ Czasu nie ma za wiele!`;
         try {
             await member.send(dmMessage);
             consola.info(`[Queue Pull] Sent DM to ${member.user.tag} (${userId}) about being pulled from queue.`);
@@ -785,10 +783,10 @@ function getQueueActionRow(canManageQueue = false) {
     if (canManageQueue) {
         row.addComponents(
             new ButtonBuilder()
-                .setCustomId('queue_pull_next') // Ten przycisk nadal pociąga pierwszą osobę
-                .setLabel('Pull Następny')      // Zmieniona etykieta dla jasności
+                .setCustomId('queue_pull_next')
+                .setLabel('Pull')
                 .setStyle(ButtonStyle.Primary)
-                .setEmoji('🎣')
+                .setEmoji('⬆️')
         );
     }
     return row;
@@ -1729,7 +1727,7 @@ client.on('interactionCreate', async i => {
                     await updateQueueMessage(i);
                     return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
                 }
-            } else if (subcommandName === 'pull') { // Zmieniono na pull (z liczbą)
+            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 const liczba = i.options.getInteger('liczba') || 1;
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
@@ -1750,8 +1748,8 @@ client.on('interactionCreate', async i => {
                 await updateQueueMessage(i);
                 const pulledMentions = pulledUsersInfo.join(', ');
                 await i.editReply({ content: `🎣 Następujące osoby (${pulledUsersInfo.length}) zostały pociągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
-            } else if (subcommandName === 'pull_user') { // Zachowano pull_user dla konkretnego gracza
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+            } else if (subcommandName === 'pull_user') {
+                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
                 const targetUser = i.options.getUser('uzytkownik');
                 if (!targetUser) return i.reply({ content: '❌ Musisz wskazać użytkownika.', ephemeral: true });
 
