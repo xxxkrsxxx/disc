@@ -277,6 +277,8 @@ const KTOSUS_MESSAGES = [
     "Na pytanie „kto jest SUS?” wszechświat szepcze: @nick.",
     "@nick jest tak samo podejrzany/a jak ananas na pizzy (nie zachęcamy do dyskusji na temat pizzy hawajskiej)",
     "@nick nie jest winny/a… tylko dziwnie często się tak jednak składa.",
+    "Adamesko znowu krzyczy 'spokój', a @nick właśnie planuje cichy sabotaż.",
+    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje 'kurwa' z szewską pasją."
 ];
 
 
