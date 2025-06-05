@@ -111,7 +111,7 @@ const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg';
 const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png';
 
 
-const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json');
+const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json'); // Przechowuje {"userId": "YYYY-MM-DD"}
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
 const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
@@ -206,12 +206,13 @@ function getWynikRanking(includeMvpMention = false, mvpUserId = null, showAll = 
 
 function addPollPoints(userId) {
     updateWynikRank(userId, 100);
-    consola.info(`[Poll Voting] Added 100 points to ${userId} for first vote in poll cycle.`);
+    consola.info(`[Poll Voting] Added 100 points to ${userId} for first vote of the day.`);
 }
 
+// Ta funkcja teraz czyści statusy bonusów codziennie
 function resetPollBonusData() {
     saveJSON(POLL_BONUS_STATUS_FILE, {});
-    consola.info('💰 Dane statusu bonusu za głosowanie w ankietach (pollBonusStatus.json) zresetowane.');
+    consola.info('💰 Dane statusu bonusu za głosowanie w ankietach (pollBonusStatus.json) zresetowane na nowy dzień.');
 }
 
 
@@ -262,13 +263,23 @@ const KTOSUS_MESSAGES = [
     "Jeśli @nick jest w parze impo z Pacią to wytrwają wspólnie najwyżej do pierwszego spotkania.",
     "Skip na Hozolu to żart. A @nick zrobił/a to na serio- szczerze? Mega sus!",
     "@nick próbuje zrzucić swoje grzechy na Karo. Raczej nie polecamy tego robić, bo to ona pisała bota od rankingu.",
-    "Adamesko znowu krzyczy \"spokój!\", a @nick właśnie planuje cichy sabotaż.",
-    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje \"kurwa\" z szewską pasją.",
+    "Adamesko znowu krzyczy "spokój!", a @nick właśnie planuje cichy sabotaż.",
+    "Kiedy @nick robi coś głupiego, ADM Zerashi już ładuje "kurwa" z szewską pasją.",
     "Kilah może gra raz na sto lat, ale @nick zabija w każdej rundzie. Przypadek?",
     "Zwierzak zna mapy z geoguessr, a @nick zna tylko trasy do najbliższego trupa.",
     "Amae jeszcze nie zdążyła wejść na VC, a @nick już zabił pół załogi.",
     "@nick i kabelki? Przecież to jest daltonista! MEGA SUS!",
-    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu..."
+    "Nawet jeśli @nick nie jest impostorem to i tak ma coś na sumieniu...",
+    "@nick jest mega sus. Powód? Brak. Tak jak podczas niektórych głosowań w lobby.",
+    "Gdyby Among miał horoskop, @nick był/aby Skorpionem, bo to najbardziej zdradliwy znak zodiaku.",
+    "Gdyby słowo SUS miało avatar, wyglądałoby jak @nick.",
+    "@nick zachowuje się jakby miał/a rolę killera... Pewnie dlatego, że ją dostał/a.",
+    "Zaufanie do @nick? To jak granie w Rosyjską ruletkę na sześć naboi.",
+    "@nick to typ, który najpierw mówi "spokojnie", a potem wbija nóż w plecy na światłach.",
+    "W tym świecie są dwie rzeczy pewne: podatki i to, że @nick jest SUS.",
+    "Na pytanie „kto jest SUS?” wszechświat szepcze: @nick.",
+    "@nick jest tak samo podejrzany/a jak ananas na pizzy (nie zachęcamy do dyskusji na temat pizzy hawajskiej)",
+    "@nick nie jest winny/a… tylko dziwnie często się tak jednak składa.",
 ];
 
 
@@ -312,12 +323,7 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('pull') // Zmieniono nazwę na 'pull' i logikę na pociąganie X osób
-                .setDescription('Pobiera X pierwszych graczy z kolejki (admin/mistrz lobby).')
-                .addIntegerOption(option => option.setName('liczba').setDescription('Liczba osób do pobrania (domyślnie 1).').setRequired(false).setMinValue(1))
-            )
-            .addSubcommand(subcommand => // Dodano z powrotem pull_user
-                subcommand.setName('pull_user')
+                subcommand.setName('pociagnij') // Zmieniono: teraz tylko dla konkretnego gracza
                 .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
@@ -385,9 +391,9 @@ async function registerCommands() {
 }
 
 // --- Pozostałe funkcje bez zmian ---
-// ... (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
-// ... (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// ... (getTempVoiceChannelControlPanelMessage, manualStartPoll, client.once('ready', ...), client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
+// (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
+// (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
+// (getTempVoiceChannelControlPanelMessage, manualStartPoll, client.once('ready', ...), client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
 // Poniżej skrócone wersje dla kompletności, pełny kod w poprzednich odpowiedziach.
 
 function getPanelEmbed(guild) {
@@ -536,7 +542,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! �🎉🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
@@ -591,13 +597,14 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         await message.channel.send({ embeds: [summaryEmbed] });
         consola.info(`[Voting Ended] Results announced. Winner: ${winnerTime || 'No votes / Tie'}`);
 
+        // Wysyłanie listy uczestników na kanał logów
         if (POLL_PARTICIPANTS_LOG_CHANNEL_ID && allVoters.size > 0) {
             try {
                 const logChannel = await client.channels.fetch(POLL_PARTICIPANTS_LOG_CHANNEL_ID);
                 if (logChannel && logChannel.isTextBased()) {
                     const participantsEmbed = new EmbedBuilder()
                         .setTitle(`🗳️ Uczestnicy Ankiety z ${new Date().toLocaleDateString('pl-PL')}`)
-                        .setColor(0x7289DA)
+                        .setColor(0x7289DA) // Kolor Discorda
                         .setTimestamp();
 
                     const fields = [];
@@ -742,7 +749,7 @@ async function attemptMovePlayerToLobby(interaction, userId, guild) {
 function getQueueEmbed() {
     const embed = new EmbedBuilder()
         .setColor('#2ECC71')
-        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! 🔪')
+        .setTitle('🔪 Lobby pełne? Zajmij miejsce w kolejce! �')
         .setDescription('Użyj przycisków poniżej, aby zarządzać swoim miejscem w kolejce.')
         .addFields({ name: 'Rozmiar kolejki', value: `**${currentQueue.length}** graczy` });
 
@@ -784,9 +791,9 @@ function getQueueActionRow(canManageQueue = false) {
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
-                .setLabel('Pull')
+                .setLabel('Pull Następny')
                 .setStyle(ButtonStyle.Primary)
-                .setEmoji('⬆️')
+                .setEmoji('🎣')
         );
     }
     return row;
@@ -1086,7 +1093,7 @@ client.once('ready', async () => {
         } catch (e) { consola.error('Error scheduling vote end at 16:00:', e); }
     });
 
-    schedule.scheduleJob('0 0 * * 1', resetPollBonusData);
+    schedule.scheduleJob('0 0 * * *', resetPollBonusData); // Zmieniono na codziennie o północy
 
     schedule.scheduleJob('5 9 * * 1', async () => {
         try {
@@ -1219,24 +1226,26 @@ client.on('interactionCreate', async i => {
 
             let replyMessageContent = '';
             const pollBonusStatus = loadJSON(POLL_BONUS_STATUS_FILE, {});
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-            if (oldVote === newVote) {
+            if (oldVote === newVote) { // Użytkownik odklikuje swój głos
                 votes.delete(user.id);
                 replyMessageContent = 'Twój głos został wycofany.';
 
-                if (pollBonusStatus[user.id]) {
-                    updateWynikRank(user.id, -100);
-                    delete pollBonusStatus[user.id];
+                // Sprawdź, czy bonus został przyznany dzisiaj za TEN głos
+                if (pollBonusStatus[user.id] === today) {
+                    updateWynikRank(user.id, -100); // Odejmij punkty
+                    delete pollBonusStatus[user.id]; // Usuń status przyznania bonusu na dziś
                     saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
-                    replyMessageContent += ' Bonusowe punkty za pierwszy głos w tym cyklu zostały odjęte.';
-                    consola.info(`[Poll Voting] User ${user.tag} unvoted. Removed 100 bonus points. Bonus status reset.`);
+                    replyMessageContent += ' Bonusowe punkty za dzisiejszy pierwszy głos zostały odjęte.';
+                    consola.info(`[Poll Voting] User ${user.tag} unvoted. Removed 100 bonus points for today. Bonus status reset for today.`);
                 }
-            } else {
-                if (!pollBonusStatus[user.id]) {
+            } else { // Nowy głos lub zmiana głosu
+                if (pollBonusStatus[user.id] !== today) { // Jeśli nie otrzymał jeszcze bonusu dzisiaj
                     addPollPoints(user.id);
-                    pollBonusStatus[user.id] = true;
+                    pollBonusStatus[user.id] = today; // Zapisz datę przyznania bonusu
                     saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
-                    consola.info(`[Poll Voting] User ${user.tag} voted for the first time in cycle. Added 100 bonus points.`);
+                    consola.info(`[Poll Voting] User ${user.tag} voted for the first time today. Added 100 bonus points.`);
                 }
                 votes.set(user.id, newVote);
                 replyMessageContent = `Zagłosowałeś na ${newVote.replace('vote_', '')}:00.`;
@@ -1868,7 +1877,7 @@ client.on('interactionCreate', async i => {
 
                 // Losowanie wiadomości i wstawianie wzmianki
                 const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
-                const finalMessage = randomMessageTemplate.replace('@nick', `<@${randomMember.id}>`);
+                const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`); // Użycie globalnego replace, na wszelki wypadek
 
                 return i.reply(finalMessage);
             } catch (err) {
