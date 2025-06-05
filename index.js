@@ -435,7 +435,7 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
 
     const processedGameIds = loadJSON(PROCESSED_GAME_IDS_FILE, []);
     let newGamesProcessedCount = 0;
-    let pointsAwardedMessages = [];
+    let pointsAwardedMessages = []; // Zbiera informacje o przyznanych punktach dla odpowiedzi
 
     for (const game of gamesToProcess) {
         const gameIdentifier = game.gameDbId || game.gameId;
@@ -566,9 +566,74 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
 }
 
 // --- Pozostałe funkcje bez zmian ---
-// (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
-// (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// (getTempVoiceChannelControlPanelMessage, manualStartPoll)
+// ... (getPanelEmbed, getPanelRow, determineWinnerDescriptionForMainEmbed, buildPollEmbeds, endVoting)
+// ... (isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
+// ... (getTempVoiceChannelControlPanelMessage, manualStartPoll)
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
+consola.success('[INIT] Client object has been defined.'); // Dodany log
+
+const votes = new Collection();
+let voteMessage = null;
+const temporaryVoiceChannels = new Map();
+const monitoredVcSessionJoins = new Map();
+
+
+async function manualStartPoll(interaction) {
+    if (!isUserAdmin(interaction, interaction.guild)) {
+        return interaction.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+    }
+
+    try {
+        const pollChannelId = CHANNEL_ID || DEFAULT_POLL_CHANNEL_ID;
+        if (!pollChannelId) {
+             consola.error('[Manual Poll Start] Brak skonfigurowanego CHANNEL_ID dla ankiet.');
+             return interaction.reply({ content: '❌ Kanał dla ankiet nie jest skonfigurowany.', ephemeral: true });
+        }
+        const pollChannel = await client.channels.fetch(pollChannelId);
+
+        if (!pollChannel) {
+            consola.error(`[Manual Poll Start] Nie znaleziono kanału dla ankiet (ID: ${pollChannelId})`);
+            return interaction.reply({ content: '❌ Nie znaleziono kanału dla ankiet.', ephemeral: true });
+        }
+
+        votes.clear();
+        consola.info('[Manual Poll Start] Lokalna kolekcja głosów (votes) wyczyszczona.');
+
+        const initialPollEmbeds = buildPollEmbeds(votes);
+
+        const pollRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('vote_19').setEmoji('<:amongus:1369715159806902393>').setLabel('A może wcześniej? (19:00)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('vote_20').setEmoji('<:catJAM:1369714552916148224>').setLabel('Będę! (20:00)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('vote_21').setEmoji('<:VibingRabbit:1369714461568663784>').setLabel('Będę, ale później (21:00)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('vote_22').setEmoji('<:SUSSY:1369714561938362438>').setLabel('Będę, ale później (22:00)').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('poll_show_voters').setEmoji('👀').setLabel('Pokaż Głosujących').setStyle(ButtonStyle.Secondary)
+        );
+
+        let contentMessage = '';
+        if (ROLE_ID) {
+            contentMessage = `<@&${ROLE_ID}>`;
+        }
+
+        if (voteMessage) {
+            try {
+                await voteMessage.delete();
+                consola.info('[Manual Poll Start] Stara wiadomość ankiety (voteMessage) usunięta.');
+            } catch (e) {
+                consola.warn('[Manual Poll Start] Nie udało się usunąć starej voteMessage (mogła już nie istnieć).');
+            }
+        }
+
+        voteMessage = await pollChannel.send({ content: contentMessage, embeds: initialPollEmbeds, components: [pollRow] });
+        consola.info(`[Manual Poll Start] Ankieta godzinowa została wysłana na kanał ${pollChannel.name} (ID: ${voteMessage.id})`);
+        await interaction.reply({ content: `✅ Ankieta testowa uruchomiona w <#${pollChannel.id}>!`, ephemeral: true });
+
+    } catch (e) {
+        consola.error('[Manual Poll Start] Error starting manual poll:', e);
+        await interaction.reply({ content: '❌ Wystąpił błąd podczas uruchamiania ankiety testowej.', ephemeral: true });
+    }
+}
+
 
 client.once('ready', async () => {
     consola.success(`✅ Logged in as ${client.user.tag}`);
@@ -839,10 +904,6 @@ client.once('ready', async () => {
         } catch (e) { consola.error('Error sending weekly score ranking or assigning MVP:', e); }
     });
 });
-
-// Pozostała część kodu (client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
-// została w poprzedniej odpowiedzi. Dla zwięzłości, nie powtarzam jej tutaj w całości.
-// Poniżej kluczowe fragmenty interactionCreate dla nowych/zmienionych komend.
 
 client.on('interactionCreate', async i => {
     try {
