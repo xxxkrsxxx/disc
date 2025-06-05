@@ -243,7 +243,25 @@ function loadQueueMessageId() {
 
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
-    // ... (reszta GIFów)
+    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/y0NFayaBeiWEU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XVR9lp9qUDHmU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif',
+    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/s2qXK8wAvkHTO/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l2JJyDYEX1tXFmCd2/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWZkYWcxczc4eXZ6cGh2djRqMXhlOGVzcjhlbTZhcTE1cGppenEyNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/lPuW5AlR9AeWzSsIqi/giphy.gif',
+    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/mCRJDo24UvJMA/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1kkxWqT5nvLXupUTwK/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MDJ9IbxxvDUQM/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/13CoXDiaCcCoyk/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/rcRwO8GMSfNV6/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/c4t11obaChpu0/giphy.gif',
+    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnUxZG5wczZoM3VpNWFnanNkYmRiajN1dG95ZDNyaDJiNWhzc29iNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fQZX2aoRC1Tqw/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
 
 const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif'));
@@ -255,7 +273,7 @@ const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzO
 const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif';
 const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif';
 
-const KTOSUS_COOLDOWN_DURATION = 24 * 60 * 60 * 1000; // 24 godziny w milisekundach
+const KTOSUS_COOLDOWN_DURATION = 24 * 60 * 60 * 1000;
 const KTOSUS_MESSAGES = [
     "To że @nick jest sus, jest tak samo pewne jak to, że Mesdek coś wtrąci, nawet jak nikt nie pytał.",
     "@nick sus? Mesdek jeszcze nie skończył zdania, a już wszystko wie.",
@@ -285,7 +303,6 @@ async function registerCommands() {
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
 
-    // Grupa komend /ankieta
     cmds.push(
         new SlashCommandBuilder().setName('ankieta').setDescription('Zarządzanie ankietami.')
             .addSubcommand(subcommand =>
@@ -299,7 +316,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Grupa komend /kolejka
     cmds.push(
         new SlashCommandBuilder().setName('kolejka').setDescription('Zarządzanie kolejką do gry.')
             .addSubcommand(subcommand =>
@@ -334,7 +350,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Grupa komend /ranking
     cmds.push(
         new SlashCommandBuilder().setName('ranking').setDescription('Zarządzanie rankingiem punktów.')
             .addSubcommand(subcommand =>
@@ -365,7 +380,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Komenda /win
     cmds.push(
         new SlashCommandBuilder()
             .setName('win')
@@ -373,7 +387,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Komenda /ktosus
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
@@ -403,12 +416,10 @@ async function fetchGameResultsFromApi(date = null) {
     try {
         let requestUrl = `${AMONG_GAMES_API_URL}?token=${AMONG_GAMES_API_TOKEN}&secret=${AMONG_GAMES_API_SECRET}`;
         if (date) {
-            requestUrl += `&dzien=${date}`; // Format YYYY-MM-DD
+            requestUrl += `&dzien=${date}`;
         }
-
-        consola.info(`[API Fetch] Fetching games from API. URL (secret redacted): ${requestUrl.replace(AMONG_GAMES_API_SECRET, '******')}`);
+        consola.info(`[API Fetch] Attempting to fetch: ${requestUrl.replace(AMONG_GAMES_API_SECRET, '******')}`);
         const response = await axios.get(requestUrl);
-
         if (response.data && response.data.success && Array.isArray(response.data.games)) {
             consola.info(`[API Fetch] Successfully fetched ${response.data.count} games.`);
             return response.data.games;
@@ -417,10 +428,12 @@ async function fetchGameResultsFromApi(date = null) {
             return [];
         }
     } catch (error) {
-        consola.error('[API Fetch] Error fetching game results:', error.message);
+        consola.error('[API Fetch] Error during API request:', error.message);
         if (error.response) {
             consola.error('[API Fetch] Error response data:', error.response.data);
             consola.error('[API Fetch] Error response status:', error.response.status);
+        } else {
+            consola.error('[API Fetch] No response received from API or other network error.');
         }
         return null;
     }
@@ -428,6 +441,10 @@ async function fetchGameResultsFromApi(date = null) {
 
 async function processGameResultsAndAwardPoints(gamesToProcess, interaction = null, discordClient = null) {
     const currentClient = interaction ? interaction.client : discordClient;
+    if (!currentClient) {
+        consola.error('[Process Results] CRITICAL: Discord client instance is not available.');
+        return 0;
+    }
 
     if (!gamesToProcess || gamesToProcess.length === 0) {
         consola.info('[Process Results] No new games to process from API.');
@@ -540,8 +557,8 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
                         autoUpdateMessage = autoUpdateMessage.substring(0, 1900) + "\n... (więcej informacji w logach konsoli)";
                     }
                 }
-                // Zakomentowane, aby uniknąć spamu, można odkomentować w razie potrzeby
-                // await summaryChannel.send(autoUpdateMessage); 
+                // Zakomentowane, aby uniknąć spamu
+                // await summaryChannel.send(autoUpdateMessage);
                 // consola.info(`[API Auto-Update] Sent summary message to channel ${summaryChannel.name}.`);
             }
         } catch (e) {
@@ -566,7 +583,14 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
     return newGamesProcessedCount;
 }
 
-// --- Pozostałe funkcje (getPanelEmbed, itd. są pełne, jak w poprzedniej wersji) ---
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
+consola.success('[INIT] Client object has been defined.');
+
+const votes = new Collection();
+let voteMessage = null;
+const temporaryVoiceChannels = new Map();
+const monitoredVcSessionJoins = new Map();
+
 function getPanelEmbed(guild) {
     let rankingDescription = 'Ładowanie rankingu...';
     if (guild) {
@@ -957,7 +981,7 @@ function getQueueActionRow(canManageQueue = false) {
                 .setEmoji('❌')
         );
 
-    if (LEADER_ROLE_ID || LOBBY_MASTER_ROLE_ID || OWNER_ID) { // Przycisk zawsze widoczny dla osób z uprawnieniami
+    if (LEADER_ROLE_ID || LOBBY_MASTER_ROLE_ID || OWNER_ID) {
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
@@ -1016,7 +1040,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_lock_${vcId}`).setLabel('Zablokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔒').setDisabled(isLocked),
         new ButtonBuilder().setCustomId(`tempvc_unlock_${vcId}`).setLabel('Odblokuj').setStyle(ButtonStyle.Secondary).setEmoji('🔓').setDisabled(!isLocked),
         new ButtonBuilder().setCustomId(`tempvc_rename_modal_${vcId}`).setLabel('Nazwa').setStyle(ButtonStyle.Primary).setEmoji('✍️'),
-        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('👥')
+        new ButtonBuilder().setCustomId(`tempvc_limit_modal_${vcId}`).setLabel('Limit').setStyle(ButtonStyle.Primary).setEmoji('�')
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tempvc_permit_select_${vcId}`).setLabel('Pozwól').setStyle(ButtonStyle.Success).setEmoji('✅'),
@@ -1031,15 +1055,6 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
     consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
     return { embeds: [embed], components: components };
 }
-
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers] });
-consola.success('[INIT] Client object has been defined.');
-
-const votes = new Collection();
-let voteMessage = null;
-const temporaryVoiceChannels = new Map();
-const monitoredVcSessionJoins = new Map();
 
 
 async function manualStartPoll(interaction) {
@@ -1098,25 +1113,25 @@ async function manualStartPoll(interaction) {
 }
 
 // Definicja funkcji scheduledApiFetch w globalnym zasięgu modułu
-async function scheduledApiFetch() {
-    consola.info('[Scheduled Task - API] Job started via named function. Checking function types...');
-    consola.info(`[Scheduled Task - API] typeof fetchGameResultsFromApi: ${typeof fetchGameResultsFromApi}`); // Debug log
-    consola.info(`[Scheduled Task - API] typeof processGameResultsAndAwardPoints: ${typeof processGameResultsAndAwardPoints}`); // Debug log
+async function scheduledApiFetch(discordClient) { // Przekazujemy instancję klienta
+    consola.info('[Scheduled Task - API] Job started. Checking function types...');
+    consola.info(`[Scheduled Task - API] typeof fetchGameResultsFromApi: ${typeof fetchGameResultsFromApi}`);
+    consola.info(`[Scheduled Task - API] typeof processGameResultsAndAwardPoints: ${typeof processGameResultsAndAwardPoints}`);
 
     if (typeof fetchGameResultsFromApi !== 'function' || typeof processGameResultsAndAwardPoints !== 'function') {
         consola.error('[Scheduled Task - API] CRITICAL: API functions not defined within scheduledApiFetch scope!');
-        return; // Zatrzymaj, jeśli funkcje nie są zdefiniowane
+        return;
     }
 
-    consola.info('[Scheduled Task - API] Fetching game results every 2 minutes (from named function)...');
+    consola.info('[Scheduled Task - API] Fetching game results every 2 minutes...');
     const today = new Date().toISOString().slice(0, 10);
     try {
         const gameResults = await fetchGameResultsFromApi(today);
         if (gameResults) {
-            await processGameResultsAndAwardPoints(gameResults, null, client); // Przekaż obiekt client
+            await processGameResultsAndAwardPoints(gameResults, null, discordClient); // Przekazujemy client
         }
     } catch (scheduleError) {
-        consola.error("[Scheduled Task - API] Error during scheduled job execution (named function):", scheduleError);
+        consola.error("[Scheduled Task - API] Error during scheduled job execution:", scheduleError);
     }
 }
 
@@ -1127,9 +1142,10 @@ client.once('ready', async () => {
     await registerCommands();
     consola.info(`[DEBUG] Type of fetchGameResultsFromApi before scheduling: ${typeof fetchGameResultsFromApi}`);
 
-    // Automatyczne pobieranie i przetwarzanie wyników gier co 2 minuty
+
     if (AMONG_GAMES_API_URL && AMONG_GAMES_API_TOKEN && AMONG_GAMES_API_SECRET) {
-        schedule.scheduleJob('*/2 * * * *', scheduledApiFetch); // Użyj zdefiniowanej funkcji
+        // Przekazanie `client` do funkcji, która będzie wywoływana przez scheduler
+        schedule.scheduleJob('*/2 * * * *', () => scheduledApiFetch(client));
         consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED (every 2 minutes via named function).');
     } else {
         consola.warn('[Scheduled Task - API] API credentials for Among Us games are not configured. Automatic fetching disabled.');
@@ -1427,24 +1443,23 @@ client.on('interactionCreate', async i => {
 
             let replyMessageContent = '';
             const pollBonusStatus = loadJSON(POLL_BONUS_STATUS_FILE, {});
-            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+            const today = new Date().toISOString().slice(0, 10);
 
-            if (oldVote === newVote) { // Użytkownik odklikuje swój głos
+            if (oldVote === newVote) {
                 votes.delete(user.id);
                 replyMessageContent = 'Twój głos został wycofany.';
 
-                // Sprawdź, czy bonus został przyznany dzisiaj za TEN głos
                 if (pollBonusStatus[user.id] === today) {
-                    updateWynikRank(user.id, -100); // Odejmij punkty
-                    delete pollBonusStatus[user.id]; // Usuń status przyznania bonusu na dziś
+                    updateWynikRank(user.id, -100);
+                    delete pollBonusStatus[user.id];
                     saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
                     replyMessageContent += ' Bonusowe punkty za dzisiejszy pierwszy głos zostały odjęte.';
                     consola.info(`[Poll Voting] User ${user.tag} unvoted. Removed 100 bonus points for today. Bonus status reset for today.`);
                 }
-            } else { // Nowy głos lub zmiana głosu
-                if (pollBonusStatus[user.id] !== today) { // Jeśli nie otrzymał jeszcze bonusu dzisiaj
+            } else {
+                if (pollBonusStatus[user.id] !== today) {
                     addPollPoints(user.id);
-                    pollBonusStatus[user.id] = today; // Zapisz datę przyznania bonusu
+                    pollBonusStatus[user.id] = today;
                     saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
                     consola.info(`[Poll Voting] User ${user.tag} voted for the first time today. Added 100 bonus points.`);
                 }
@@ -2053,7 +2068,7 @@ client.on('interactionCreate', async i => {
             await registerCommands();
             return i.editReply('✅ Commands reloaded.');
         } else if (commandName === 'ktosus') {
-             if (!isUserQueueManager(i, i.guild)) { // Zmieniono na isUserQueueManager
+             if (!isUserQueueManager(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
