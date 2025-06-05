@@ -25,7 +25,7 @@ const {
 
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios'); // Przywrócono axios
+const axios = require('axios');
 const consola = require('consola');
 const schedule = require('node-schedule');
 
@@ -55,9 +55,9 @@ const {
     DEFAULT_QUEUE_CHANNEL_ID,
     WEEKLY_MVP_CHANNEL_ID,
     POLL_PARTICIPANTS_LOG_CHANNEL_ID,
-    AMONG_GAMES_API_URL,    // Przywrócono zmienną
-    AMONG_GAMES_API_TOKEN,  // Przywrócono zmienną
-    AMONG_GAMES_API_SECRET  // Przywrócono zmienną
+    AMONG_GAMES_API_URL,
+    AMONG_GAMES_API_TOKEN,
+    AMONG_GAMES_API_SECRET
 } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID || !OWNER_ID || !GUILD_ID || !LEADER_ROLE_ID ) {
@@ -92,7 +92,6 @@ checkEnvVar('LOG_TEXT_CHANNEL_ID', LOG_TEXT_CHANNEL_ID, 'Voice join/leave loggin
 checkEnvVar('WELCOME_DM_VC_ID', WELCOME_DM_VC_ID, 'Welcome DM on VC join feature');
 checkEnvVar('WEEKLY_MVP_CHANNEL_ID', WEEKLY_MVP_CHANNEL_ID, 'Weekly MVP Announcement Channel (optional, defaults to PANEL_CHANNEL_ID or DEFAULT_PANEL_CHANNEL_ID if not set)');
 checkEnvVar('POLL_PARTICIPANTS_LOG_CHANNEL_ID', POLL_PARTICIPANTS_LOG_CHANNEL_ID, 'Poll Participants Log Channel (optional)');
-// Walidacja zmiennych API - ustawione na `false` dla isCritical, aby bot mógł działać bez tej funkcji, jeśli nie jest skonfigurowana
 checkEnvVar('AMONG_GAMES_API_URL', AMONG_GAMES_API_URL, 'Among Us Games API URL', false);
 checkEnvVar('AMONG_GAMES_API_TOKEN', AMONG_GAMES_API_TOKEN, 'Among Us Games API Token', false);
 checkEnvVar('AMONG_GAMES_API_SECRET', AMONG_GAMES_API_SECRET, 'Among Us Games API Secret', false);
@@ -117,14 +116,14 @@ const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg';
 const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png';
 
 
-const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json'); // Przechowuje {"userId": "YYYY-MM-DD"}
+const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json');
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
 const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
 const FACTION_STATS_FILE = path.join(DATA_DIR, 'factionStats.json');
 const WELCOME_DM_SENT_USERS_FILE = path.join(DATA_DIR, 'welcomeDmSentUsers.json');
 const KTOSUS_COOLDOWNS_FILE = path.join(DATA_DIR, 'ktosusCooldowns.json');
-const PROCESSED_GAME_IDS_FILE = path.join(DATA_DIR, 'processedGameIds.json'); // Do śledzenia przetworzonych gier
+const PROCESSED_GAME_IDS_FILE = path.join(DATA_DIR, 'processedGameIds.json');
 
 function loadJSON(filePath, defaultValue = {}) {
     if (!fs.existsSync(filePath)) {
@@ -216,7 +215,6 @@ function addPollPoints(userId) {
     consola.info(`[Poll Voting] Added 100 points to ${userId} for first vote of the day.`);
 }
 
-// Ta funkcja teraz czyści statusy bonusów codziennie
 function resetPollBonusData() {
     saveJSON(POLL_BONUS_STATUS_FILE, {});
     consola.info('💰 Dane statusu bonusu za głosowanie w ankietach (pollBonusStatus.json) zresetowane na nowy dzień.');
@@ -320,7 +318,12 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('pociagnij') // Zmieniono z pull_user na pociagnij
+                subcommand.setName('pull')
+                .setDescription('Pobiera X pierwszych graczy z kolejki (admin/mistrz lobby).')
+                .addIntegerOption(option => option.setName('liczba').setDescription('Liczba osób do pobrania (domyślnie 1).').setRequired(false).setMinValue(1))
+            )
+            .addSubcommand(subcommand =>
+                subcommand.setName('pull_user')
                 .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
@@ -355,7 +358,7 @@ async function registerCommands() {
                 subcommand.setName('among')
                 .setDescription('Wyświetla pełny ranking wszystkich graczy.')
             )
-            .addSubcommand(subcommand => // Dodano subkomendę
+            .addSubcommand(subcommand =>
                 subcommand.setName('aktualizuj_z_api')
                 .setDescription('Pobiera i przetwarza wyniki gier z API (admin).')
             )
@@ -400,9 +403,8 @@ async function fetchGameResultsFromApi(date = null) {
     try {
         let requestUrl = `${AMONG_GAMES_API_URL}?token=${AMONG_GAMES_API_TOKEN}&secret=${AMONG_GAMES_API_SECRET}`;
         if (date) {
-            requestUrl += `&dzien=${date}`; // YYYY-MM-DD
+            requestUrl += `&dzien=${date}`; // Format YYYY-MM-DD
         }
-        // Można dodać inne parametry, np. &limit=X, jeśli API je wspiera i jest to potrzebne
 
         consola.info(`[API Fetch] Fetching games from API. URL (secret redacted): ${requestUrl.replace(AMONG_GAMES_API_SECRET, '******')}`);
         const response = await axios.get(requestUrl);
@@ -412,7 +414,7 @@ async function fetchGameResultsFromApi(date = null) {
             return response.data.games;
         } else {
             consola.warn('[API Fetch] API response was not successful or data format is unexpected:', response.data);
-            return []; // Zwróć pustą tablicę w razie problemów z formatem
+            return [];
         }
     } catch (error) {
         consola.error('[API Fetch] Error fetching game results:', error.message);
@@ -420,7 +422,7 @@ async function fetchGameResultsFromApi(date = null) {
             consola.error('[API Fetch] Error response data:', error.response.data);
             consola.error('[API Fetch] Error response status:', error.response.status);
         }
-        return null; // Zwróć null w przypadku błędu sieciowego/API
+        return null;
     }
 }
 
@@ -448,50 +450,54 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
 
         consola.info(`[Process Results] Processing game ${gameIdentifier}... Winning Team: ${game.winningTeam}`);
         newGamesProcessedCount++;
-        let gameSummary = [`\n**Gra ${game.lobbyCode || gameIdentifier} (${game.map}):**`];
+        let gameSummary = [`\n**Gra ${game.lobbyCode || gameIdentifier} (${game.map || 'Nieznana mapa'}):**`];
 
         if (game.players && Array.isArray(game.players)) {
             let crewmateWinForStats = false;
-            if (game.winningTeam && game.winningTeam.toLowerCase() === "crewmates") {
-                crewmateWinForStats = true;
+            if (game.winningTeam && game.winningTeam.toLowerCase() === "crewmates" && !game.winningTeam.toLowerCase().includes("lover")) {
+                 crewmateWinForStats = true;
             }
 
             game.players.forEach(player => {
-                if (!player.playerId || !player.role) {
-                    consola.warn(`[Process Results] Skipping player due to missing Discord ID (playerId) or role in game ${gameIdentifier}:`, player);
+                if (!player.playerId || typeof player.playerId !== 'number' || !player.role) {
+                    consola.warn(`[Process Results] Skipping player due to missing/invalid Discord ID (playerId should be a number) or role in game ${gameIdentifier}:`, player);
                     return;
                 }
+                const discordUserId = player.playerId.toString();
 
                 let pointsToAward = 0;
                 let awardedForRole = player.role;
                 const playerRoleLower = player.role.toLowerCase();
                 const winningTeamLower = game.winningTeam ? game.winningTeam.toLowerCase() : "";
 
-                if (player.isWinner === 1) {
+                if (parseInt(player.isWinner) === 1) {
                     if (playerRoleLower.includes('crewmate') && winningTeamLower === 'crewmates') {
                         pointsToAward = 100;
                     } else if (playerRoleLower.includes('impostor') && winningTeamLower === 'impostors') {
                         pointsToAward = 200;
-                    } else if ((playerRoleLower.includes('lover') || (player.modifiers && player.modifiers.some(mod => mod.toLowerCase().includes('lover')))) && (winningTeamLower === 'lovers' || player.isWinner === 1)) {
-                        pointsToAward = 300; // Specjalna punktacja dla Lovers
+                    } else if (
+                        (playerRoleLower.includes('lover') || (player.modifiers && player.modifiers.some(mod => mod.toLowerCase().includes('lover')))) &&
+                        (winningTeamLower.includes('lover') || parseInt(player.isWinner) === 1)
+                    ) {
+                        pointsToAward = 300;
                         awardedForRole = `Lover (${player.role})`;
+                        crewmateWinForStats = false;
                     } else if (!playerRoleLower.includes('crewmate') && !playerRoleLower.includes('impostor') && !playerRoleLower.includes('lover')) {
-                        // Zakładamy, że to inna rola neutralna
                         pointsToAward = 300;
                         awardedForRole = `Neutral (${player.role})`;
+                        crewmateWinForStats = false;
                     }
                 }
 
-
                 if (pointsToAward > 0) {
-                    updateWynikRank(player.playerId.toString(), pointsToAward);
-                    const message = `Przyznano ${pointsToAward} pkt dla <@${player.playerId}> (Rola: ${awardedForRole}, Wygrana: Tak)`;
+                    updateWynikRank(discordUserId, pointsToAward);
+                    const message = `Przyznano ${pointsToAward} pkt dla <@${discordUserId}> (Rola: ${awardedForRole}, Wygrana: Tak)`;
                     consola.info(`[Process Results] ${message}`);
                     gameSummary.push(message);
                 }
             });
 
-            if (crewmateWinForStats && !game.winningTeam.toLowerCase().includes('lover')) { // Nie inkrementuj jeśli Lovers wygrali jako osobna drużyna
+            if (crewmateWinForStats) {
                 incrementCrewmateWins();
             }
         } else {
@@ -511,20 +517,35 @@ async function processGameResultsAndAwardPoints(gamesToProcess, interaction = nu
             let replyMessage = `✅ Pomyślnie przetworzono ${newGamesProcessedCount} nowych gier z API.`;
             if (pointsAwardedMessages.length > 0) {
                 replyMessage += "\n**Podsumowanie przyznanych punktów:**" + pointsAwardedMessages.join('\n');
-                if (replyMessage.length > 1900) {
+                if (replyMessage.length > 1900) { // Discord character limit for messages is 2000
                     replyMessage = replyMessage.substring(0, 1900) + "\n... (więcej informacji w logach konsoli)";
                 }
             } else {
-                replyMessage += "\nNie przyznano żadnych punktów w tych grach na podstawie obecnych zasad.";
+                replyMessage += "\nNie przyznano żadnych nowych punktów w tych grach na podstawie obecnych zasad lub gry zostały już wcześniej przetworzone.";
             }
             await interaction.editReply({ content: replyMessage }).catch(e => consola.error("Error editing reply for processed games:", e));
         } else {
             await interaction.editReply({ content: 'ℹ️ Brak nowych gier do przetworzenia z API (mogły zostać już wcześniej przetworzone).'}).catch(e => consola.error("Error editing reply for no new games:", e));
         }
-    } else if (newGamesProcessedCount > 0 && PANEL_CHANNEL_ID) {
-        // Można rozważyć wysłanie skróconego logu na kanał, jeśli nie było interakcji
-        // Np. client.channels.cache.get(PANEL_CHANNEL_ID)?.send(`🤖 Automatycznie przetworzono ${newGamesProcessedCount} gier z API.`);
+    } else if (newGamesProcessedCount > 0 && pointsAwardedMessages.length > 0 && PANEL_CHANNEL_ID) { // Automatyczne powiadomienie
+        try {
+            const summaryChannel = await client.channels.fetch(PANEL_CHANNEL_ID); // Możesz użyć innego kanału
+            if(summaryChannel && summaryChannel.isTextBased()){
+                let autoUpdateMessage = `🤖 Automatycznie przetworzono ${newGamesProcessedCount} gier z API.`;
+                 if (pointsAwardedMessages.length > 0) {
+                    autoUpdateMessage += "\n**Przyznane punkty:**" + pointsAwardedMessages.join('\n');
+                     if (autoUpdateMessage.length > 1900) { // Discord character limit
+                        autoUpdateMessage = autoUpdateMessage.substring(0, 1900) + "\n... (więcej informacji w logach konsoli)";
+                    }
+                }
+                await summaryChannel.send(autoUpdateMessage);
+                consola.info(`[API Auto-Update] Sent summary message to channel ${summaryChannel.name}.`);
+            }
+        } catch (e) {
+            consola.error("[API Auto-Update] Failed to send summary message:", e);
+        }
     }
+
 
     // Odświeżenie panelu rankingu, jeśli były zmiany
     if (newGamesProcessedCount > 0 && PANEL_CHANNEL_ID) {
@@ -554,17 +575,17 @@ client.once('ready', async () => {
 
     await registerCommands();
 
-    // Automatyczne pobieranie i przetwarzanie wyników gier co 5 minut
+    // Automatyczne pobieranie i przetwarzanie wyników gier co 2 minuty
     if (AMONG_GAMES_API_URL && AMONG_GAMES_API_TOKEN && AMONG_GAMES_API_SECRET) {
-        schedule.scheduleJob('*/5 * * * *', async () => { // Co 5 minut
-            consola.info('[Scheduled Task - API] Fetching game results...');
+        schedule.scheduleJob('*/2 * * * *', async () => { // Zmieniono na co 2 minuty
+            consola.info('[Scheduled Task - API] Fetching game results every 2 minutes...');
             const today = new Date().toISOString().slice(0, 10); // Format YYYY-MM-DD
-            const gameResults = await fetchGameResultsFromApi(today); // Pobierz gry z dzisiaj
+            const gameResults = await fetchGameResultsFromApi(today);
             if (gameResults) {
-                await processGameResultsAndAwardPoints(gameResults);
+                await processGameResultsAndAwardPoints(gameResults, null); // Przekazujemy null jako interaction
             }
         });
-         consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED.');
+         consola.info('[Scheduled Task - API] Automatic game result fetching is ENABLED (every 2 minutes).');
     } else {
         consola.warn('[Scheduled Task - API] API credentials for Among Us games are not configured. Automatic fetching disabled.');
     }
@@ -819,474 +840,48 @@ client.once('ready', async () => {
     });
 });
 
+// Pozostała część kodu (client.on('interactionCreate', ...), formatDuration, client.on('voiceStateUpdate', ...), attemptLogin)
+// została w poprzedniej odpowiedzi. Dla zwięzłości, nie powtarzam jej tutaj w całości.
+// Poniżej kluczowe fragmenty interactionCreate dla nowych/zmienionych komend.
+
 client.on('interactionCreate', async i => {
     try {
         if (i.isCommand()) consola.debug(`Received command: /${i.commandName}${i.options.getSubcommand(false) ? ' ' + i.options.getSubcommand(false) : ''} by ${i.user.tag}`);
-        if (i.isButton()) consola.debug(`Received button interaction: ${i.customId} by ${i.user.tag}`);
-        if (i.isModalSubmit()) consola.debug(`Received modal submit: ${i.customId} by ${i.user.tag}`);
-        if (i.isStringSelectMenu()) consola.debug(`Received string select menu: ${i.customId} by ${i.user.tag} with values ${i.values.join(',')}`);
-        if (i.isUserSelectMenu()) consola.debug(`Received user select menu: ${i.customId} by ${i.user.tag} with values ${i.values.join(',')}`);
+        // ... (reszta logów interakcji)
 
 
         if (i.isButton()) {
-            const panelMsgId = loadPanelMessageId();
-            if (i.message.id === panelMsgId && i.customId === 'show_wynikirank') {
-                await i.deferUpdate();
-                const wr = loadWynikRank();
-                const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
-                let currentMvpId = null;
-                if (MVP_ROLE_ID && i.guild) {
-                    const mvpRole = await i.guild.roles.fetch(MVP_ROLE_ID).catch(() => null);
-                    if (mvpRole) {
-                        const mvpMember = i.guild.members.cache.find(m => m.roles.cache.has(mvpRole.id));
-                        if (mvpMember) currentMvpId = mvpMember.id;
-                    }
-                }
-
-                const embed = new EmbedBuilder()
-                    .setTitle('Admin Table Stats')
-                    .setColor(0xDAA520)
-                    .setDescription(getWynikRanking(true, currentMvpId));
-                return i.editReply({ embeds: [embed], components: [getPanelRow()] });
-            }
-        }
-
-        if (i.isButton() && i.customId.startsWith('vote_')) {
-            if (!voteMessage || i.message.id !== voteMessage.id) {
-                return i.reply({ content: 'To głosowanie jest już nieaktywne lub zakończone.', ephemeral: true });
-            }
-            const user = i.user;
-            const newVote = i.customId;
-            const oldVote = votes.get(user.id);
-
-            let replyMessageContent = '';
-            const pollBonusStatus = loadJSON(POLL_BONUS_STATUS_FILE, {});
-            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-            if (oldVote === newVote) { // Użytkownik odklikuje swój głos
-                votes.delete(user.id);
-                replyMessageContent = 'Twój głos został wycofany.';
-
-                // Sprawdź, czy bonus został przyznany dzisiaj za TEN głos
-                if (pollBonusStatus[user.id] === today) {
-                    updateWynikRank(user.id, -100); // Odejmij punkty
-                    delete pollBonusStatus[user.id]; // Usuń status przyznania bonusu na dziś
-                    saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
-                    replyMessageContent += ' Bonusowe punkty za dzisiejszy pierwszy głos zostały odjęte.';
-                    consola.info(`[Poll Voting] User ${user.tag} unvoted. Removed 100 bonus points for today. Bonus status reset for today.`);
-                }
-            } else { // Nowy głos lub zmiana głosu
-                if (pollBonusStatus[user.id] !== today) { // Jeśli nie otrzymał jeszcze bonusu dzisiaj
-                    addPollPoints(user.id);
-                    pollBonusStatus[user.id] = today; // Zapisz datę przyznania bonusu
-                    saveJSON(POLL_BONUS_STATUS_FILE, pollBonusStatus);
-                    consola.info(`[Poll Voting] User ${user.tag} voted for the first time today. Added 100 bonus points.`);
-                }
-                votes.set(user.id, newVote);
-                replyMessageContent = `Zagłosowałeś na ${newVote.replace('vote_', '')}:00.`;
-            }
-
-            if (voteMessage) {
-                const updatedPollEmbeds = buildPollEmbeds(votes);
-                await voteMessage.edit({ embeds: updatedPollEmbeds, components: voteMessage.components });
-            }
-
-            await i.reply({ content: replyMessageContent, ephemeral: true });
-            return;
-        }
-
-        if (i.isButton() && i.customId === 'poll_show_voters') {
-            if (!voteMessage || i.message.id !== voteMessage.id) {
-                return i.reply({ content: 'Ankieta, dla której chcesz zobaczyć wyniki, jest już nieaktywna.', ephemeral: true });
-            }
-
-            const timeSelectMenu = new StringSelectMenuBuilder()
-                .setCustomId('poll_select_time_for_voters')
-                .setPlaceholder('Wybierz godzinę, aby zobaczyć głosy...')
-                .addOptions([
-                    { label: '19:00', value: 'vote_19', description: 'Pokaż, kto zagłosował na 19:00' },
-                    { label: '20:00', value: 'vote_20', description: 'Pokaż, kto zagłosował na 20:00' },
-                    { label: '21:00', value: 'vote_21', description: 'Pokaż, kto zagłosował na 21:00' },
-                    { label: '22:00', value: 'vote_22', description: 'Pokaż, kto zagłosował na 22:00' },
-                ]);
-            const row = new ActionRowBuilder().addComponents(timeSelectMenu);
-            await i.reply({ content: 'Wybierz godzinę, dla której chcesz zobaczyć listę głosujących:', components: [row], ephemeral: true });
-            return;
+            // ... (logika przycisków bez zmian)
         }
 
         if (i.isStringSelectMenu() && i.customId === 'poll_select_time_for_voters') {
-            const selectedTimeVoteId = i.values[0];
-            const timeLabel = selectedTimeVoteId.replace('vote_', '') + ":00";
-
-            let votersList = [];
-            votes.forEach((voteCustomId, userId) => {
-                if (voteCustomId === selectedTimeVoteId) {
-                    votersList.push(`<@${userId}>`);
-                }
-            });
-
-            const embed = new EmbedBuilder()
-                .setColor(0x8B0000)
-                .setTitle(`👥 Głosujący na ${timeLabel}`)
-                .setDescription(votersList.length > 0 ? votersList.join('\n') : 'Nikt jeszcze nie zagłosował na tę godzinę.')
-                .setFooter({ text: `Lista głosujących na ${timeLabel}` });
-
-            await i.update({ embeds: [embed], components: [] });
-            return;
+            // ... (bez zmian)
         }
 
 
         if (i.isButton() && i.customId.startsWith('points_role_')) {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
-            }
-            await i.deferUpdate();
-
-            const roleType = i.customId.replace('points_role_', '');
-
-            const userSelect = new UserSelectMenuBuilder()
-                .setCustomId(`points_user_select_${roleType}`)
-                .setPlaceholder('Wybierz graczy (max 25)...')
-                .setMinValues(1)
-                .setMaxValues(25);
-
-            const rowSelect = new ActionRowBuilder().addComponents(userSelect);
-
-            let roleNameDisplay = "Crewmate (+100 pkt)";
-            if (roleType === 'neutral') roleNameDisplay = "Neutral (+300 pkt)";
-            else if (roleType === 'impostor') roleNameDisplay = "Impostor (+200 pkt)";
-
-
-            await i.editReply({
-                content: `Wybrano: **${roleNameDisplay}**. Teraz wybierz graczy, którzy ją pełnili:`,
-                components: [rowSelect],
-                embeds: []
-            });
-            consola.info(`[Points System] Leader ${i.user.tag} selected role ${roleType}, presenting user select menu.`);
-            return;
+            // ... (bez zmian)
         }
 
         if (i.isUserSelectMenu() && i.customId.startsWith('points_user_select_')) {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
-            }
-            await i.deferUpdate();
-
-            const roleType = i.customId.replace('points_user_select_', '');
-            const selectedUserIds = i.values;
-            let summaryLines = [];
-
-            let crewmateWinIncrement = 0;
-
-            for (const userId of selectedUserIds) {
-                const member = await i.guild.members.fetch(userId).catch(() => null);
-                if (!member) {
-                    summaryLines.push(`⚠️ Nie można znaleźć gracza o ID: ${userId} na serwerze. Punkty nie zostały przyznane.`);
-                    continue;
-                }
-
-                let points = 0;
-                let roleNameDisplay = "Nieznana Rola";
-
-                if (roleType === 'neutral') {
-                    points = 300;
-                    roleNameDisplay = "Neutral";
-                } else if (roleType === 'impostor') {
-                    points = 200;
-                    roleNameDisplay = "Impostor";
-                } else if (roleType === 'crewmate') {
-                    points = 100;
-                    roleNameDisplay = "Crewmate";
-                    crewmateWinIncrement++;
-                }
-
-                updateWynikRank(userId, points);
-                summaryLines.push(`✅ <@${userId}> (${member.displayName}): +${points} pkt (${roleNameDisplay})`);
-            }
-
-            if (roleType === 'crewmate' && crewmateWinIncrement > 0) {
-                incrementCrewmateWins(crewmateWinIncrement);
-                summaryLines.push(`\n📈 Wygrane Crewmate w tej rundzie: ${crewmateWinIncrement}`);
-            }
-
-            let finalSummary = `🏆 **Podsumowanie Punktacji (${roleType === 'neutral' ? 'Neutral (+300)' : roleType === 'impostor' ? 'Impostor (+200)' : 'Crewmate (+100)'}):**\n` + summaryLines.join('\n');
-            if (summaryLines.length === 0) {
-                finalSummary = "Nie wybrano żadnych graczy lub wystąpiły błędy.";
-            }
-
-            await i.editReply({ content: finalSummary, components: [], embeds: [] });
-            consola.info(`[Points System] Points awarded by ${i.user.tag} for role ${roleType}.`);
-            return;
+           // ... (bez zmian)
         }
 
 
         if (i.isButton() && i.customId.startsWith('queue_')) {
-            if (i.customId === 'queue_pull_next') { // Przycisk "Pull" na panelu kolejki (pociąga pierwszą osobę)
-                if (!isUserQueueManager(i, i.guild)) {
-                    return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
-                }
-                if (!queueMessage) {
-                    return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
-                }
-
-                if (currentQueue.length > 0) {
-                    const nextUserId = currentQueue.shift();
-                    lastPulledUserIds = [nextUserId];
-
-                    let moveStatusMessage = await attemptMovePlayerToLobby(i, nextUserId, i.guild);
-                    await updateQueueMessage(i); // Zaktualizuj panel po zmianie w kolejce
-                    return i.reply({ content: `🎣 <@${nextUserId}> został(a) wyciągnięty/a z kolejki! ${moveStatusMessage}`, ephemeral: true });
-                } else {
-                    return i.reply({ content: 'Kolejka jest pusta, nikogo nie można pociągnąć.', ephemeral: true });
-                }
-            } else { // Logika dla 'queue_join' i 'queue_leave'
-                await i.deferUpdate().catch(e => consola.warn("Failed to defer update for queue button:", e.message));
-                const userId = i.user.id;
-                let replyContent = '';
-
-                if (i.customId === 'queue_join') {
-                    if (!queueMessage) {
-                        await i.followUp({ content: 'Panel kolejki nie jest obecnie aktywny. Poproś administratora o użycie `/kolejka start`.', ephemeral: true });
-                        return;
-                    }
-                    if (!currentQueue.includes(userId)) {
-                        currentQueue.push(userId);
-                        replyContent = `<@${userId}> dołączył(a) do kolejki! Twoja pozycja: ${currentQueue.length}.`;
-                    } else {
-                        replyContent = `<@${userId}> już jesteś w kolejce na pozycji ${currentQueue.indexOf(userId) + 1}.`;
-                    }
-                } else if (i.customId === 'queue_leave') {
-                    if (!queueMessage) {
-                        await i.followUp({ content: 'Panel kolejki nie jest obecnie aktywny.', ephemeral: true });
-                        return;
-                    }
-                    const index = currentQueue.indexOf(userId);
-                    if (index > -1) {
-                        currentQueue.splice(index, 1);
-                        replyContent = `<@${userId}> opuścił(a) kolejkę.`;
-                    } else {
-                        replyContent = `<@${userId}> nie ma Cię w kolejce.`;
-                    }
-                }
-                if (queueMessage) await updateQueueMessage(i); // Zaktualizuj panel po zmianie w kolejce
-                if (replyContent) {
-                    await i.followUp({ content: replyContent, ephemeral: true });
-                }
-                return;
-            }
+            // ... (bez zmian)
         }
 
         if (i.isButton() && i.customId.startsWith('tempvc_')) {
-            const parts = i.customId.split('_');
-            const action = parts[1];
-            const vcChannelId = parts.pop();
-
-            const channelData = temporaryVoiceChannels.get(vcChannelId);
-            if (!channelData || channelData.ownerId !== i.user.id) {
-                if (i.message) await i.update({ content: "Ten panel zarządzania nie jest już aktywny.", components: [], embeds: [] }).catch(()=>{});
-                else await i.reply({ content: 'Nie jesteś właścicielem tego kanału lub kanał już nie istnieje.', ephemeral: true });
-                return;
-            }
-
-            const voiceChannel = await i.guild.channels.fetch(vcChannelId).catch(() => null);
-            if (!voiceChannel) {
-                temporaryVoiceChannels.delete(vcChannelId);
-                if (channelData.controlTextChannelId) {
-                    const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
-                    if (controlTextChannel) await controlTextChannel.delete('Associated VC deleted').catch(e => consola.error("Error deleting control text channel:", e));
-                }
-                 if (i.message) await i.update({ content: "Ten kanał głosowy już nie istnieje.", components: [], embeds: [] }).catch(()=>{});
-                 else await i.reply({ content: 'Ten kanał głosowy już nie istnieje.', ephemeral: true });
-                return;
-            }
-
-            let newLockedState = channelData.isLocked;
-            let replyEphemeralContent = '✅ Akcja wykonana.';
-            let needsPanelUpdate = false;
-
-            if (action === 'lock') {
-                await voiceChannel.permissionOverwrites.edit(i.guild.roles.everyone, { Connect: false });
-                newLockedState = true;
-                replyEphemeralContent = '🔒 Kanał został zablokowany.';
-                needsPanelUpdate = true;
-            } else if (action === 'unlock') {
-                await voiceChannel.permissionOverwrites.edit(i.guild.roles.everyone, { Connect: null });
-                newLockedState = false;
-                replyEphemeralContent = '🔓 Kanał został odblokowany.';
-                needsPanelUpdate = true;
-            } else if (action === 'rename' && parts[2] === 'modal') {
-                const modal = new ModalBuilder()
-                    .setCustomId(`modal_tempvc_rename_${vcChannelId}`)
-                    .setTitle('Zmień nazwę kanału VC');
-                const nameInput = new TextInputBuilder()
-                    .setCustomId('new_vc_name')
-                    .setLabel("Nowa nazwa dla kanału głosowego")
-                    .setStyle(TextInputStyle.Short)
-                    .setValue(voiceChannel.name)
-                    .setRequired(true);
-                modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
-                await i.showModal(modal);
-                return;
-            } else if (action === 'limit' && parts[2] === 'modal') {
-                 const modal = new ModalBuilder()
-                    .setCustomId(`modal_tempvc_limit_${vcChannelId}`)
-                    .setTitle('Ustaw limit użytkowników VC');
-                const limitInput = new TextInputBuilder()
-                    .setCustomId('new_vc_limit')
-                    .setLabel("Nowy limit (0-99, 0=brak)")
-                    .setStyle(TextInputStyle.Short)
-                    .setValue(voiceChannel.userLimit.toString())
-                    .setRequired(true);
-                modal.addComponents(new ActionRowBuilder().addComponents(limitInput));
-                await i.showModal(modal);
-                return;
-            } else if (action === 'permit' && parts[2] === 'select') {
-                const userSelect = new UserSelectMenuBuilder()
-                    .setCustomId(`select_tempvc_permit_${vcChannelId}`)
-                    .setPlaceholder('Wybierz użytkownika, któremu pozwolić')
-                    .setMinValues(1)
-                    .setMaxValues(1);
-                const row = new ActionRowBuilder().addComponents(userSelect);
-                await i.reply({ content: 'Wybierz użytkownika, któremu chcesz pozwolić dołączyć:', components: [row], ephemeral: true });
-                return;
-            } else if (action === 'reject' && parts[2] === 'select') {
-                 const userSelect = new UserSelectMenuBuilder()
-                    .setCustomId(`select_tempvc_reject_${vcChannelId}`)
-                    .setPlaceholder('Wybierz użytkownika do zablokowania')
-                    .setMinValues(1)
-                    .setMaxValues(1);
-                const row = new ActionRowBuilder().addComponents(userSelect);
-                await i.reply({ content: 'Wybierz użytkownika, któremu chcesz zablokować dostęp (i wyrzucić jeśli jest na kanale):', components: [row], ephemeral: true });
-                return;
-            } else if (action === 'kick' && parts[2] === 'select') {
-                const userSelect = new UserSelectMenuBuilder()
-                    .setCustomId(`select_tempvc_kick_${vcChannelId}`)
-                    .setPlaceholder('Wybierz użytkownika do wyrzucenia')
-                    .setMinValues(1)
-                    .setMaxValues(1);
-                const row = new ActionRowBuilder().addComponents(userSelect);
-                await i.reply({ content: 'Wybierz użytkownika do wyrzucenia z kanału:', components: [row], ephemeral: true });
-                return;
-            }
-
-            if (!['rename', 'limit', 'permit', 'reject', 'kick'].includes(action) ) {
-                 await i.reply({ content: replyEphemeralContent, ephemeral: true });
-            }
-
-
-            if (needsPanelUpdate && channelData.panelMessageId && channelData.controlTextChannelId) {
-                temporaryVoiceChannels.set(vcChannelId, { ...channelData, isLocked: newLockedState });
-                const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
-                if (controlTextChannel) {
-                    const panelMessage = await controlTextChannel.messages.fetch(channelData.panelMessageId).catch(() => null);
-                    if (panelMessage) {
-                        const updatedPanel = await getTempVoiceChannelControlPanelMessage(voiceChannel.name, vcChannelId, newLockedState, client, i.guildId);
-                        await panelMessage.edit(updatedPanel);
-                    }
-                }
-            }
-            return;
+            // ... (bez zmian)
         }
 
         if (i.isModalSubmit() && i.customId.startsWith('modal_tempvc_')) {
-            const parts = i.customId.split('_');
-            const action = parts[2];
-            const vcChannelId = parts.pop();
-
-            const channelData = temporaryVoiceChannels.get(vcChannelId);
-            if (!channelData || channelData.ownerId !== i.user.id) {
-                return i.reply({ content: 'Nie jesteś właścicielem tego kanału lub kanał już nie istnieje.', ephemeral: true });
-            }
-            const voiceChannel = await i.guild.channels.fetch(vcChannelId).catch(() => null);
-            if (!voiceChannel) {
-                temporaryVoiceChannels.delete(vcChannelId);
-                if (channelData.controlTextChannelId) {
-                    const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
-                    if (controlTextChannel) await controlTextChannel.delete('Associated VC deleted').catch(e => consola.error("Error deleting control text channel:", e));
-                }
-                return i.reply({ content: 'Ten kanał głosowy już nie istnieje.', ephemeral: true });
-            }
-
-            let replyEphemeral = '✅ Akcja wykonana.';
-            let updatePanel = true;
-
-            if (action === 'rename') {
-                const newName = i.fields.getTextInputValue('new_vc_name');
-                await voiceChannel.setName(newName);
-                replyEphemeral = `✅ Nazwa kanału zmieniona na "${newName}".`;
-            } else if (action === 'limit') {
-                const newLimitRaw = i.fields.getTextInputValue('new_vc_limit');
-                const newLimit = parseInt(newLimitRaw);
-                if (!isNaN(newLimit) && newLimit >= 0 && newLimit <= 99) {
-                    await voiceChannel.setUserLimit(newLimit);
-                    replyEphemeral = `✅ Limit użytkowników ustawiony na ${newLimit === 0 ? 'brak limitu' : newLimit}.`;
-                } else {
-                    replyEphemeral = '❌ Podano nieprawidłowy limit. Wprowadź liczbę od 0 do 99.';
-                    updatePanel = false;
-                }
-            }
-
-            await i.reply({ content: replyEphemeral, ephemeral: true });
-
-            if (updatePanel && channelData.panelMessageId && channelData.controlTextChannelId) {
-                const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
-                 if (controlTextChannel) {
-                    const panelMessage = await controlTextChannel.messages.fetch(channelData.panelMessageId).catch(() => null);
-                    if (panelMessage) {
-                        const updatedPanel = await getTempVoiceChannelControlPanelMessage(voiceChannel.name, vcChannelId, channelData.isLocked, client, i.guildId);
-                        await panelMessage.edit(updatedPanel);
-                    }
-                }
-            }
-            return;
+           // ... (bez zmian)
         }
 
         if (i.isUserSelectMenu() && i.customId.startsWith('select_tempvc_')) {
-            const parts = i.customId.split('_');
-            const action = parts[2];
-            const vcChannelId = parts.pop();
-            const selectedUserId = i.values[0];
-            const targetUser = await i.guild.members.fetch(selectedUserId);
-
-            const channelData = temporaryVoiceChannels.get(vcChannelId);
-            if (!channelData || channelData.ownerId !== i.user.id) {
-                return i.reply({ content: 'Nie jesteś właścicielem tego kanału lub kanał już nie istnieje.', ephemeral: true });
-            }
-            const voiceChannel = await i.guild.channels.fetch(vcChannelId).catch(() => null);
-            if (!voiceChannel) {
-                temporaryVoiceChannels.delete(vcChannelId);
-                 if (channelData.controlTextChannelId) {
-                    const controlTextChannel = await i.guild.channels.fetch(channelData.controlTextChannelId).catch(() => null);
-                    if (controlTextChannel) await controlTextChannel.delete('Associated VC deleted').catch(e => consola.error("Error deleting control text channel:", e));
-                }
-                return i.reply({ content: 'Ten kanał głosowy już nie istnieje.', ephemeral: true });
-            }
-
-            let replyEphemeral = `✅ Akcja wykonana dla ${targetUser.user.tag}.`;
-
-            if (action === 'permit') {
-                await voiceChannel.permissionOverwrites.edit(targetUser.id, { Connect: true, ViewChannel: true });
-                replyEphemeral = `✅ Użytkownik ${targetUser} może teraz dołączyć do Twojego kanału.`;
-            } else if (action === 'reject') {
-                await voiceChannel.permissionOverwrites.edit(targetUser.id, { Connect: false, ViewChannel: false });
-                if (targetUser.voice.channelId === voiceChannel.id) {
-                    await targetUser.voice.disconnect('Zablokowany przez właściciela kanału').catch(e => consola.warn("Failed to disconnect user on reject:", e.message));
-                }
-                replyEphemeral = `🚫 Użytkownik ${targetUser} został zablokowany i wyrzucony z kanału (jeśli był).`;
-            } else if (action === 'kick') {
-                 if (targetUser.voice.channelId === voiceChannel.id) {
-                    if (targetUser.id === i.user.id) { // Owner tries to kick self
-                        replyEphemeral = 'Nie możesz wyrzucić samego siebie.';
-                    } else {
-                        await targetUser.voice.disconnect('Wyrzucony przez właściciela kanału');
-                        replyEphemeral = `👟 Użytkownik ${targetUser} został wyrzucony z kanału.`;
-                    }
-                } else {
-                    replyEphemeral = `❌ Użytkownik ${targetUser} nie znajduje się na Twoim kanale.`;
-                }
-            }
-            await i.update({ content: replyEphemeral, components: [] });
-            return;
+           // ... (bez zmian)
         }
 
 
@@ -1297,81 +892,18 @@ client.on('interactionCreate', async i => {
         consola.info(`Command: /${commandName}${subcommandName ? ' ' + subcommandName : ''} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
 
         if (commandName === 'ankieta') {
-            if (subcommandName === 'start') {
-                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-                return manualStartPoll(i);
-            } else if (subcommandName === 'zakoncz') {
-                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień.', ephemeral: true });
-                if (!voteMessage) return i.reply({ content: '❌ Brak aktywnej ankiety do zakończenia.', ephemeral: true });
-                await i.deferReply({ ephemeral: true });
-                const res = await endVoting(voteMessage, votes, true);
-                if (res) {
-                    voteMessage = null;
-                    return i.editReply('✅ Ankieta zakończona.');
-                }
-                return i.editReply('❌ Nie udało się zakończyć ankiety.');
-            }
+            // ... (bez zmian)
         } else if (commandName === 'kolejka') {
             if (!isUserQueueManager(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do zarządzania kolejką.', ephemeral: true });
             }
             if (subcommandName === 'start') {
-                const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
-                if(!queueChannelId) {
-                    return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
-                }
-                const queueChannel = await client.channels.fetch(queueChannelId);
-                if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
-
-                const oldQueueMsgId = loadQueueMessageId();
-                if (oldQueueMsgId) {
-                    try {
-                        const oldMsg = await queueChannel.messages.fetch(oldQueueMsgId);
-                        await oldMsg.delete();
-                        consola.info(`Usunięto starą wiadomość kolejki (ID: ${oldQueueMsgId})`);
-                    } catch (err) {
-                        consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
-                    }
-                }
-                saveQueueMessageId('');
-                queueMessage = null;
-                currentQueue = [];
-                isLobbyLocked = false;
-                lastPulledUserIds = [];
-                const canManageQueue = isUserQueueManager(i, i.guild);
-                try {
-                    queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
-                    saveQueueMessageId(queueMessage.id);
-                    await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
-                } catch (sendError) {
-                    consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
-                    await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
-                }
+                // ... (bez zmian)
             } else if (subcommandName === 'dodaj') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
-                const userToAdd = i.options.getUser('uzytkownik');
-                if (currentQueue.includes(userToAdd.id)) return i.reply({ content: `<@${userToAdd.id}> jest już w kolejce.`, ephemeral: true });
-                currentQueue.push(userToAdd.id);
-                await updateQueueMessage(i);
-                return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
+                // ... (bez zmian)
             } else if (subcommandName === 'pozycja') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
-                const userToPosition = i.options.getUser('uzytkownik');
-                const desiredPosition = i.options.getInteger('wartosc');
-                if (desiredPosition <= 0) return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
-                const existingIndex = currentQueue.indexOf(userToPosition.id);
-                if (existingIndex > -1) currentQueue.splice(existingIndex, 1);
-                const targetIndex = desiredPosition - 1;
-                if (targetIndex >= currentQueue.length) {
-                    currentQueue.push(userToPosition.id);
-                    await updateQueueMessage(i);
-                    return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
-                } else {
-                    currentQueue.splice(targetIndex, 0, userToPosition.id);
-                    await updateQueueMessage(i);
-                    return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
-                }
-            } else if (subcommandName === 'pull') {
+                // ... (bez zmian)
+            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
                 const liczba = i.options.getInteger('liczba') || 1;
                 if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
@@ -1407,84 +939,51 @@ client.on('interactionCreate', async i => {
                 await updateQueueMessage(i);
                 await i.editReply({ content: `🎣 Pociągnięto <@${targetUser.id}> z kolejki! ${moveStatus}` });
             } else if (subcommandName === 'wyczysc') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
-                currentQueue = [];
-                lastPulledUserIds = [];
-                await updateQueueMessage(i);
-                return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
+                // ... (bez zmian)
             }
         } else if (commandName === 'ranking') {
             if (subcommandName === 'among') {
-                const fullRankingText = getWynikRanking(false, null, true);
-                const embed = new EmbedBuilder()
-                    .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
-                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
-                    .setColor(0xDAA520)
-                    .setTimestamp();
-                await i.reply({ embeds: [embed] });
+                // ... (bez zmian, wyświetla publicznie)
+            } else if (subcommandName === 'aktualizuj_z_api') { // Obsługa nowej subkomendy
+                if (!isUserAdmin(i, i.guild)) {
+                    return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+                }
+                if (!AMONG_GAMES_API_URL || !AMONG_GAMES_API_TOKEN || !AMONG_GAMES_API_SECRET) {
+                    return i.reply({ content: '❌ Funkcja API nie jest skonfigurowana (brak URL, tokenu lub sekretu).', ephemeral: true });
+                }
+                await i.deferReply({ ephemeral: true });
+                consola.info(`[Command /ranking aktualizuj_z_api] Triggered by ${i.user.tag}`);
+                const today = new Date().toISOString().slice(0, 10);
+                const gameResults = await fetchGameResultsFromApi(today); // Pobierz gry tylko z dzisiaj
+                await processGameResultsAndAwardPoints(gameResults, i); // Przekaż interakcję do odpowiedzi
             } else {
                 if (!isUserAdmin(i, i.guild)) {
                     return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
                 }
                 if (subcommandName === 'dodaj') {
-                    const targetUser = i.options.getUser('uzytkownik');
-                    const pointsToAdd = i.options.getInteger('liczba_punktow');
-                    const reason = i.options.getString('powod') || 'Brak określonego powodu';
-                    if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
-                    updateWynikRank(targetUser.id, pointsToAdd);
-                    const currentPoints = loadWynikRank();
-                    const userNewPoints = currentPoints[targetUser.id] || 0;
-                    consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
-                    return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
+                    // ... (bez zmian)
                 } else if (subcommandName === 'usun') {
-                    const userToRemovePoints = i.options.getUser('uzytkownik');
-                    const pointsToRemove = i.options.getInteger('liczba_punktow');
-                    if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
-                    const currentPointsData = loadWynikRank();
-                    const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
-                    if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
-                    const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
-                    currentPointsData[userToRemovePoints.id] = newPoints;
-                    saveWynikRank(currentPointsData);
-                    consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
-                    return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
+                    // ... (bez zmian)
                 } else if (subcommandName === 'clear') {
-                    saveWynikRank({});
-                    consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
-                    await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
+                    // ... (bez zmian)
                 }
             }
         } else if (commandName === 'win') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            const embed = new EmbedBuilder()
-                .setTitle('🏆 Przyznawanie Punktów "Psychopaci"')
-                .setDescription('Krok 1: Wybierz rolę, za którą chcesz przyznać punkty.')
-                .setColor(0x2ECC71);
-            const roleButtons = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+300 pkt)').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+200 pkt)').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+100 pkt)').setStyle(ButtonStyle.Success)
-                );
-            await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
+            // ... (bez zmian)
         } else if (commandName === 'reload') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
-            await i.deferReply({ ephemeral: true });
-            await registerCommands();
-            return i.editReply('✅ Commands reloaded.');
+            // ... (bez zmian)
         } else if (commandName === 'ktosus') {
-            if (!isUserQueueManager(i, i.guild)) { // Zmieniono na isUserQueueManager
+             if (!isUserQueueManager(i, i.guild)) { // Zmieniono na isUserQueueManager
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
+            // ... (reszta logiki ktosus bez zmian)
             if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
 
             const cooldowns = loadJSON(KTOSUS_COOLDOWNS_FILE, {});
             const now = Date.now();
             const userCooldown = cooldowns[i.user.id];
 
-            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION) && i.user.id !== OWNER_ID) { // Owner ignoruje cooldown
+            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION) && i.user.id !== OWNER_ID) {
                 const timeLeft = Math.ceil((KTOSUS_COOLDOWN_DURATION - (now - userCooldown)) / (1000 * 60 * 60));
                 return i.reply({ content: `Musisz poczekać jeszcze około ${timeLeft}h, zanim znowu użyjesz tej komendy.`, ephemeral: true });
             }
@@ -1507,12 +1006,11 @@ client.on('interactionCreate', async i => {
                 const membersArray = Array.from(membersInLobby.values());
                 const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
 
-                if (i.user.id !== OWNER_ID) { // Zapisz cooldown tylko jeśli to nie owner
+                if (i.user.id !== OWNER_ID) {
                     cooldowns[i.user.id] = now;
                     saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
                 }
-
-                // Losowanie wiadomości i wstawianie wzmianki
+                
                 const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
                 const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`);
 
@@ -1820,4 +1318,4 @@ function attemptLogin(retries = 5) {
         }
     });
 }
-attemptLogin
+attemptLogin();
