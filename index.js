@@ -544,7 +544,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
 
         const summaryEmbed = new EmbedBuilder().setColor(0x2ECC71);
         let gifUrl;
-        let summaryTitle = '🎉 Głosowanie Zakończone! 🎉';
+        let summaryTitle = '🎉 Głosowanie Zakończone! �';
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
@@ -1669,13 +1669,243 @@ client.on('interactionCreate', async i => {
         if (!i.isChatInputCommand()) return;
         const commandName = i.commandName;
         const subcommandName = i.options.getSubcommand(false);
-        
-        if (commandName === 'ranking' && subcommandName === 'among') {
-            // Already handled above
-            return;
+
+        if (commandName === 'reload') {
+            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
+            await i.deferReply({ ephemeral: true });
+            await registerCommands();
+            return i.editReply('✅ Commands reloaded.');
         }
 
-        if (commandName === 'ktosus') {
+        if (commandName === 'ankieta') {
+            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            
+            if (subcommandName === 'start') {
+                return manualStartPoll(i);
+            } else if (subcommandName === 'zakoncz') {
+                if (!voteMessage) return i.reply({ content: '❌ Brak aktywnej ankiety do zakończenia.', ephemeral: true });
+                await i.deferReply({ ephemeral: true });
+                const res = await endVoting(voteMessage, votes, true);
+                if (res) {
+                    voteMessage = null;
+                    return i.editReply('✅ Ankieta zakończona.');
+                }
+                return i.editReply('❌ Nie udało się zakończyć ankiety.');
+            }
+        }
+
+        if (commandName === 'kolejka') {
+            if (!isUserQueueManager(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do zarządzania kolejką.', ephemeral: true });
+            }
+            if (subcommandName === 'start') {
+                const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
+                if(!queueChannelId) {
+                    return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
+                }
+                const queueChannel = await client.channels.fetch(queueChannelId);
+                if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
+
+                const oldQueueMsgId = loadQueueMessageId();
+                if (oldQueueMsgId) {
+                    try {
+                        const oldMsg = await queueChannel.messages.fetch(oldQueueMsgId);
+                        await oldMsg.delete();
+                        consola.info(`Usunięto starą wiadomość kolejki (ID: ${oldQueueMsgId})`);
+                    } catch (err) {
+                        consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
+                    }
+                }
+                saveQueueMessageId('');
+                queueMessage = null;
+                currentQueue = [];
+                isLobbyLocked = false;
+                lastPulledUserIds = [];
+                const canManageQueue = isUserQueueManager(i, i.guild);
+                try {
+                    queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
+                    saveQueueMessageId(queueMessage.id);
+                    await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
+                } catch (sendError) {
+                    consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
+                    await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
+                }
+                return;
+            } else if (subcommandName === 'dodaj') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const userToAdd = i.options.getUser('uzytkownik');
+                if (currentQueue.includes(userToAdd.id)) return i.reply({ content: `<@${userToAdd.id}> jest już w kolejce.`, ephemeral: true });
+                currentQueue.push(userToAdd.id);
+                await updateQueueMessage(i);
+                return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
+            } else if (subcommandName === 'pozycja') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const userToPosition = i.options.getUser('uzytkownik');
+                const desiredPosition = i.options.getInteger('wartosc');
+                if (desiredPosition <= 0) return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
+                const existingIndex = currentQueue.indexOf(userToPosition.id);
+                if (existingIndex > -1) currentQueue.splice(existingIndex, 1);
+                const targetIndex = desiredPosition - 1;
+                if (targetIndex >= currentQueue.length) {
+                    currentQueue.push(userToPosition.id);
+                    await updateQueueMessage(i);
+                    return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
+                } else {
+                    currentQueue.splice(targetIndex, 0, userToPosition.id);
+                    await updateQueueMessage(i);
+                    return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
+                }
+            } else if (subcommandName === 'pociagnij_gracza') { 
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
+                const targetUser = i.options.getUser('uzytkownik');
+                if (!targetUser) return i.reply({ content: '❌ Musisz wskazać użytkownika.', ephemeral: true });
+
+                const userIndex = currentQueue.indexOf(targetUser.id);
+                if (userIndex === -1) return i.reply({ content: `<@${targetUser.id}> nie znajduje się w kolejce.`, ephemeral: true });
+
+                await i.deferReply({ ephemeral: true });
+                currentQueue.splice(userIndex, 1);
+                lastPulledUserIds = [targetUser.id];
+                const moveStatus = await attemptMovePlayerToLobby(i, targetUser.id, i.guild);
+                await updateQueueMessage(i);
+                await i.editReply({ content: `🎣 Pociągnięto <@${targetUser.id}> z kolejki! ${moveStatus}` });
+            } else if (subcommandName === 'wyczysc') {
+                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
+                currentQueue = [];
+                lastPulledUserIds = [];
+                await updateQueueMessage(i);
+                return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
+            }
+        }
+        
+        if (commandName === 'ranking') {
+            if (subcommandName === 'among') {
+                const sortedPlayers = getSortedRanking();
+                if (sortedPlayers.length === 0) {
+                    return i.reply({ content: 'Brak danych do wyświetlenia w rankingu.', ephemeral: true });
+                }
+    
+                const playersPerPage = 15;
+                const totalPages = Math.ceil(sortedPlayers.length / playersPerPage);
+                let currentPage = 0;
+    
+                const generateEmbed = (page) => {
+                    const start = page * playersPerPage;
+                    const end = start + playersPerPage;
+                    const pagePlayers = sortedPlayers.slice(start, end);
+    
+                    const description = pagePlayers
+                        .map(([userId, points], index) => `${start + index + 1}. <@${userId}> – ${points} pkt`)
+                        .join('\n');
+    
+                    return new EmbedBuilder()
+                        .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
+                        .setDescription(description)
+                        .setColor(0xDAA520)
+                        .setFooter({ text: `Strona ${page + 1} z ${totalPages}` });
+                };
+    
+                const generateButtons = (page) => {
+                    return new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('ranking_prev_page')
+                            .setLabel('Poprzednia')
+                            .setStyle(ButtonStyle.Primary)
+                            .setEmoji('◀️')
+                            .setDisabled(page === 0),
+                        new ButtonBuilder()
+                            .setCustomId('ranking_next_page')
+                            .setLabel('Następna')
+                            .setStyle(ButtonStyle.Primary)
+                            .setEmoji('▶️')
+                            .setDisabled(page >= totalPages - 1)
+                    );
+                };
+    
+                const reply = await i.reply({
+                    embeds: [generateEmbed(currentPage)],
+                    components: [generateButtons(currentPage)],
+                    fetchReply: true,
+                });
+    
+                const collector = reply.createMessageComponentCollector({
+                    componentType: ComponentType.Button,
+                    time: 3 * 60 * 1000 // 3 minuty
+                });
+    
+                collector.on('collect', async interaction => {
+                    if (interaction.user.id !== i.user.id) {
+                        return interaction.reply({ content: 'Tylko osoba, która wywołała komendę, może zmieniać strony.', ephemeral: true });
+                    }
+    
+                    if (interaction.customId === 'ranking_prev_page') {
+                        currentPage--;
+                    } else if (interaction.customId === 'ranking_next_page') {
+                        currentPage++;
+                    }
+    
+                    await interaction.update({
+                        embeds: [generateEmbed(currentPage)],
+                        components: [generateButtons(currentPage)]
+                    });
+                });
+    
+                collector.on('end', () => {
+                    const disabledButtons = generateButtons(currentPage);
+                    disabledButtons.components.forEach(c => c.setDisabled(true));
+                    reply.edit({ components: [disabledButtons] }).catch(err => consola.warn("Could not edit message to disable ranking buttons after collector ended:", err.message));
+                });
+                return;
+            } else {
+                 // Reszta subkomend /ranking
+                if (!isUserAdmin(i, i.guild)) {
+                    return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+                }
+                
+                if (subcommandName === 'dodaj') {
+                    const targetUser = i.options.getUser('uzytkownik');
+                    const pointsToAdd = i.options.getInteger('liczba_punktow');
+                    const reason = i.options.getString('powod') || 'Brak określonego powodu';
+                    if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
+                    updateWynikRank(targetUser.id, pointsToAdd);
+                    const currentPoints = loadWynikRank();
+                    const userNewPoints = currentPoints[targetUser.id] || 0;
+                    consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
+                    return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
+                } else if (subcommandName === 'usun') {
+                    const userToRemovePoints = i.options.getUser('uzytkownik');
+                    const pointsToRemove = i.options.getInteger('liczba_punktow');
+                    if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
+                    const currentPointsData = loadWynikRank();
+                    const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
+                    if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
+                    const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
+                    currentPointsData[userToRemovePoints.id] = newPoints;
+                    saveWynikRank(currentPointsData);
+                    consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
+                    return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
+                } else if (subcommandName === 'clear') {
+                    saveWynikRank({});
+                    consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
+                    await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
+                }
+            }
+        } else if (commandName === 'win') {
+            if (!isUserAdmin(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            }
+            const embed = new EmbedBuilder()
+                .setTitle('🏆 Przyznawanie Punktów "Psychopaci"')
+                .setDescription('Krok 1: Wybierz rolę, za którą chcesz przyznać punkty.')
+                .setColor(0x2ECC71);
+            const roleButtons = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+300 pkt)').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+200 pkt)').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+100 pkt)').setStyle(ButtonStyle.Success)
+                );
+            await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
+        } else if (commandName === 'ktosus') {
             if (!isUserQueueManager(i, i.guild)) {
                 return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
             }
@@ -1723,10 +1953,6 @@ client.on('interactionCreate', async i => {
                 return i.reply({ content: 'Nie udało się wybrać podejrzanego, spróbuj ponownie.', ephemeral: true});
             }
         }
-        
-        // Handle other commands
-        // ... (reszta handlerów dla /kolejka, /ankieta, /win etc.)
-
     } catch (e) {
         const interactionDetails = i.isCommand() ? i.commandName : (i.isButton() || i.isModalSubmit() || i.isAnySelectMenu() ? i.customId : 'unknown interaction');
         consola.error(`Error during interaction '${interactionDetails}' by ${i.user.tag} in guild ${i.guild?.id || 'DM'}:`, e);
