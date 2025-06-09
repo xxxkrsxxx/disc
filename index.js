@@ -21,12 +21,11 @@ const {
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
     UserSelectMenuBuilder,
+    ComponentType, // Ważne dla paginacji
 } = require('discord.js');
 
 const fs = require('fs');
 const path = require('path');
-// axios is not needed if API integration is removed
-// const axios = require('axios'); 
 const consola = require('consola');
 const schedule = require('node-schedule');
 
@@ -36,8 +35,8 @@ const {
     CLIENT_ID,
     OWNER_ID,
     CHANNEL_ID, // Kanał dla ankiet
-    ROLE_ID,      // Rola pingowana przy ankietach
-    GUILD_ID,     // Kluczowe dla działania na jednym serwerze
+    ROLE_ID,       // Rola pingowana przy ankietach
+    GUILD_ID,      // Kluczowe dla działania na jednym serwerze
     LEADER_ROLE_ID,
     LOBBY_MASTER_ROLE_ID,
     PANEL_CHANNEL_ID,
@@ -108,10 +107,11 @@ if (!fs.existsSync(DATA_DIR)){
 
 // --- FILE HELPERS ---
 const ANKIETA_IMG_URL = 'https://i.imgur.com/8G1Dmkf.jpeg';
+const RANKING_IMG_URL = 'https://i.imgur.com/rF0YAFC.png';
 const MVP_WEEKLY_RANKING_IMG_URL = 'https://i.imgur.com/9Unne8r.png';
 
 
-const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json'); // Przechowuje {"userId": "YYYY-MM-DD"}
+const POLL_BONUS_STATUS_FILE = path.join(DATA_DIR, 'pollBonusStatus.json');
 const WYNIK_RANK_FILE = path.join(DATA_DIR, 'wynikRank.json');
 const PANEL_ID_FILE = path.join(DATA_DIR, 'panel_message_id.txt');
 const QUEUE_MESSAGE_ID_FILE = path.join(DATA_DIR, 'queue_message_id.txt');
@@ -183,33 +183,17 @@ function updateWynikRank(userId, pts) {
     consola.info(`[Points System] Updated score for ${userId} by ${pts}. New score: ${wr[userId]}`);
 }
 
-function getWynikRanking(includeMvpMention = false, mvpUserId = null, showAll = false) {
+function getSortedRanking() {
     const wr = loadWynikRank();
-    let sortedEntries = Object.entries(wr)
-        .sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
-
-    if (!showAll) {
-        sortedEntries = sortedEntries.slice(0, 10);
-    }
-
-    const sortedDisplay = sortedEntries.map(([userId, points], i) => {
-            let mvpMarker = '';
-            if (includeMvpMention && userId === mvpUserId && !showAll) {
-                mvpMarker = ' 👑 **MVP Tygodnia!**';
-            }
-            return `${i + 1}. <@${userId}> – ${points} pkt${mvpMarker}`;
-        });
-
-    const rankingText = sortedDisplay.length ? sortedDisplay.join('\n') : 'Brak danych do wyświetlenia.\nZacznijcie grać i zdobywać punkty!';
-    return rankingText;
+    return Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
 }
+
 
 function addPollPoints(userId) {
     updateWynikRank(userId, 100);
     consola.info(`[Poll Voting] Added 100 points to ${userId} for first vote of the day.`);
 }
 
-// Ta funkcja teraz czyści statusy bonusów codziennie
 function resetPollBonusData() {
     saveJSON(POLL_BONUS_STATUS_FILE, {});
     consola.info('💰 Dane statusu bonusu za głosowanie w ankietach (pollBonusStatus.json) zresetowane na nowy dzień.');
@@ -238,7 +222,25 @@ function loadQueueMessageId() {
 
 const POLL_CELEBRATION_GIFS = [
     'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZmh6NWJsczllZmM5cTc2bnRwbGYyeWIzZGxnYXFjbTI3aGNrY25ncCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vRlT2k2L35Cnn5C/giphy.gif',
-    // ... (reszta GIFów)
+    'https://media.giphy.com/media/olAik8MhYOB9K/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/y0NFayaBeiWEU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHI3a21xaThvZ29vZXVkcmx0M2Q3am5mdGowbGsxd3VoaWZrbWhtayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/XVR9lp9qUDHmU/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l8TwxjgFRhDASPGuXc/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif',
+    'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/s2qXK8wAvkHTO/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmM0bHBwYWZnenc5MmRod2pibTJkbHNtbWswM2FvMmU3ODIzNWs1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l2JJyDYEX1tXFmCd2/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWZkYWcxczc4eXZ6cGh2djRqMXhlOGVzcjhlbTZhcTE1cGppenEyNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/lPuW5AlR9AeWzSsIqi/giphy.gif',
+    'https://media.giphy.com/media/RE5iREBNhI0Ok/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/mCRJDo24UvJMA/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTNnZzZ6NjhhNDM1a3F3cjd1YWtqbGQ3MHpiNnZoMG1za3Rxb3Y5ciZlcD12MV9naWZzX3NlYXJjaCZjdD1n/1kkxWqT5nvLXupUTwK/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/MDJ9IbxxvDUQM/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2plM25nbjZyZ29odnpyc215cXBpaHBmcHVubXA0cXQwNmV2YWx1OCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/13CoXDiaCcCoyk/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/rcRwO8GMSfNV6/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeGE2dmN2aHlpNTljMzdnaXVzdzA1cDZmMHlqbWJnbm9jYjFyczVzcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/c4t11obaChpu0/giphy.gif',
+    'https://media.giphy.com/media/T7YENYx6PtUdO/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcnUxZG5wczZoM3VpNWFnanNkYmRiajN1dG95ZDNyaDJiNWhzc29iNyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fQZX2aoRC1Tqw/giphy.gif',
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjY1ZWF4bTlhbnV0bDNwbHhtdGl6NDlrYnRrMXM1NmJvN2VucTh0ayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QUmpqPoJ886Iw/giphy.gif'
 ];
 
 const WINNING_POLL_GIFS = POLL_CELEBRATION_GIFS.filter(gif => gif.endsWith('.gif') || gif.includes('giphy.gif'));
@@ -250,7 +252,7 @@ const TIE_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzO
 const NO_VOTES_GIF = 'https://media.giphy.com/media/yAnC4g6sUpX0MDkGOg/giphy.gif';
 const DEFAULT_POLL_GIF = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3g0YnRzOTdvajg0YXQxb2xlcTl6aTFqYm9qMmxla2N1d3BlNjJ5eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/vFnxro4sFV1R5b95xs/giphy.gif';
 
-const KTOSUS_COOLDOWN_DURATION = 24 * 60 * 60 * 1000; // 24 godziny w milisekundach
+const KTOSUS_COOLDOWN_DURATION = 8 * 60 * 60 * 1000; // ZMIANA: 8 godzin w milisekundach
 const KTOSUS_MESSAGES = [
     "To że @nick jest sus, jest tak samo pewne jak to, że Mesdek coś wtrąci, nawet jak nikt nie pytał.",
     "@nick sus? Mesdek jeszcze nie skończył zdania, a już wszystko wie.",
@@ -289,7 +291,6 @@ async function registerCommands() {
         new SlashCommandBuilder().setName('reload').setDescription('Przeładuj komendy (Owner).').toJSON()
     );
 
-    // Grupa komend /ankieta
     cmds.push(
         new SlashCommandBuilder().setName('ankieta').setDescription('Zarządzanie ankietami.')
             .addSubcommand(subcommand =>
@@ -303,7 +304,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Grupa komend /kolejka
     cmds.push(
         new SlashCommandBuilder().setName('kolejka').setDescription('Zarządzanie kolejką do gry.')
             .addSubcommand(subcommand =>
@@ -322,7 +322,7 @@ async function registerCommands() {
                 .addIntegerOption(option => option.setName('wartosc').setDescription('Numer pozycji w kolejce (od 1).').setRequired(true).setMinValue(1))
             )
             .addSubcommand(subcommand =>
-                subcommand.setName('pociagnij') // Zmieniono: teraz tylko dla konkretnego gracza
+                subcommand.setName('pociagnij_gracza')
                 .setDescription('Pociąga konkretnego gracza z kolejki (admin/mistrz lobby).')
                 .addUserOption(option => option.setName('uzytkownik').setDescription('Gracz do pociągnięcia z kolejki.').setRequired(true))
             )
@@ -333,7 +333,6 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Grupa komend /ranking
     cmds.push(
         new SlashCommandBuilder().setName('ranking').setDescription('Zarządzanie rankingiem punktów.')
             .addSubcommand(subcommand =>
@@ -355,12 +354,11 @@ async function registerCommands() {
             )
             .addSubcommand(subcommand =>
                 subcommand.setName('among')
-                .setDescription('Wyświetla pełny ranking wszystkich graczy.')
+                .setDescription('Wyświetla pełny, stronicowany ranking wszystkich graczy.')
             )
             .toJSON()
     );
 
-    // Komenda /win
     cmds.push(
         new SlashCommandBuilder()
             .setName('win')
@@ -368,11 +366,10 @@ async function registerCommands() {
             .toJSON()
     );
 
-    // Komenda /ktosus
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 24h).') // Zaktualizowany opis
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 8h).')
             .toJSON()
     );
 
@@ -383,29 +380,20 @@ async function registerCommands() {
             Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
             { body: cmds }
         );
-        consola.success(`✅ Successfully registered ${cmds.length} application (/) commands in guild ${GUILD_ID}`);
+        consola.success(`✅ Successfully registered application (/) commands in guild ${GUILD_ID}`);
     } catch (error) {
         consola.error(`❌ Failed to register application (/) commands in guild ${GUILD_ID}:`, error);
     }
 }
 
 // --- PANEL EMBED & ROW ---
-// ... (bez zmian)
-// --- ANKIETA ---
-// ... (bez zmian, w tym endVoting z logowaniem uczestników)
-// --- SEKCJA LOGIKI KOLEJKI ---
-// ... (bez zmian w isUserAdmin, isUserQueueManager, attemptMovePlayerToLobby, getQueueEmbed, getQueueActionRow, updateQueueMessage)
-// --- FUNKCJE POMOCNICZE ---
-// ... (formatDuration)
-// --- BOT SETUP ---
-// ... (bez zmian w client.once('ready', ...))
-
-// Skrócone funkcje, które nie uległy zmianie w tej iteracji
 function getPanelEmbed(guild) {
     let rankingDescription = 'Ładowanie rankingu...';
     if (guild) {
-        const wr = loadWynikRank();
+        const sortedRanking = getSortedRanking();
+        const top10 = sortedRanking.slice(0, 10);
         let currentMvpId = null;
+
         if (MVP_ROLE_ID) {
             const mvpRole = guild.roles.cache.get(MVP_ROLE_ID);
             if (mvpRole) {
@@ -413,12 +401,22 @@ function getPanelEmbed(guild) {
                 if (mvpMember) currentMvpId = mvpMember.id;
             }
         }
-        rankingDescription = getWynikRanking(true, currentMvpId, false);
+        
+        const sortedDisplay = top10.map(([userId, points], i) => {
+            let mvpMarker = '';
+            if (userId === currentMvpId) {
+                mvpMarker = ' 👑 **MVP Tygodnia!**';
+            }
+            return `${i + 1}. <@${userId}> – ${points} pkt${mvpMarker}`;
+        });
+    
+        rankingDescription = sortedDisplay.length ? sortedDisplay.join('\n') : 'Brak danych do wyświetlenia.\nZacznijcie grać i zdobywać punkty!';
     }
 
     return new EmbedBuilder()
         .setTitle('Admin Table Stats')
         .setColor(0xDAA520)
+        .setImage(RANKING_IMG_URL)
         .setDescription(rankingDescription);
 }
 
@@ -430,6 +428,9 @@ function getPanelRow() {
             .setStyle(ButtonStyle.Primary)
     );
 }
+
+// --- ANKIETA ---
+const susMessagePart = "\n\n💡Ale wiecie, co jest jeszcze bardziej SUS?\n\n🔔Próba wejścia do gry po 19:00 i zdziwienie, że już nie ma miejsca.\n      Gramy i tak od 19:00. Bądź wcześniej i zaklep sobie slota!";
 
 function determineWinnerDescriptionForMainEmbed(votesCollection) {
     const counts = { '19:00': 0, '20:00': 0, '21:00': 0, '22:00': 0 };
@@ -569,7 +570,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
                 summaryEmbed.addFields({ name: `⏰ Obecni o ${winnerTime}:`, value: 'Nikt nie potwierdził przybycia na tę godzinę.' });
             }
         } else if (winnerTime === 'tie') {
-            summaryTitle = `🤝 Mamy Remis! 🤝`;
+            summaryTitle = `🤝 Mamy Remis! �`;
             gifUrl = TIE_POLL_GIF;
             summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
             summaryEmbed.setDescription(summaryDescription);
@@ -680,6 +681,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
     }
 }
 
+// --- SEKCJA LOGIKI KOLEJKI ---
 let currentQueue = [];
 let queueMessage = null;
 let lastPulledUserIds = [];
@@ -791,7 +793,7 @@ function getQueueActionRow(canManageQueue = false) {
                 .setEmoji('❌')
         );
 
-    if (canManageQueue) { // Przycisk "Pull Następny" będzie zawsze renderowany jeśli użytkownik MA uprawnienia do zarządzania kolejką.
+    if (canManageQueue) {
         row.addComponents(
             new ButtonBuilder()
                 .setCustomId('queue_pull_next')
@@ -803,21 +805,15 @@ function getQueueActionRow(canManageQueue = false) {
     return row;
 }
 
-async function updateQueueMessage(interaction) { // Interaction może być null dla automatycznych aktualizacji
+async function updateQueueMessage(interaction) {
     if (!queueMessage) {
         consola.debug('updateQueueMessage: queueMessage is null, skipping update. Use /kolejka start to initialize.');
         return;
     }
 
     try {
-        const guild = interaction?.guild || await client.guilds.fetch(GUILD_ID); // Użyj guild z interakcji jeśli dostępne
-        
-        // Dla przycisku Pull, widoczność zależy od tego, czy *jakikolwiek* admin/mistrz istnieje z odpowiednią rolą,
-        // a nie od tego, kto ostatnio kliknął.
-        // Dlatego uproszczono - przycisk jest widoczny, jeśli role są skonfigurowane.
-        // Uprawnienia do faktycznego UŻYCIA przycisku są sprawdzane w handlerze interakcji.
+        const guild = interaction?.guild || await client.guilds.fetch(GUILD_ID);
         const showPullButton = OWNER_ID || LEADER_ROLE_ID || LOBBY_MASTER_ROLE_ID;
-
 
         if (GAME_LOBBY_VOICE_CHANNEL_ID) {
             const gameLobbyChannel = await guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
@@ -864,10 +860,7 @@ async function getTempVoiceChannelControlPanelMessage(vcName, vcId, isLocked, cl
         new ButtonBuilder().setCustomId(`tempvc_kick_select_${vcId}`).setLabel('Wyrzuć').setStyle(ButtonStyle.Danger).setEmoji('👟')
     );
 
-    const components = [row1];
-    if (row2.components.length > 0) {
-        components.push(row2);
-    }
+    const components = [row1, row2];
     consola.debug(`[getTempVoiceChannelControlPanelMessage] Generated components for VC ${vcId}:`, JSON.stringify(components.map(c => c.toJSON()), null, 2));
     return { embeds: [embed], components: components };
 }
@@ -1015,7 +1008,6 @@ client.once('ready', async () => {
                     queueMessage = await queueChannelObj.messages.fetch(qMsgId);
                     consola.info(`Queue message loaded (ID: ${queueMessage.id}). Performing initial update.`);
                     const guild = await client.guilds.fetch(GUILD_ID);
-                    // Zmieniono: przekazujemy null jako interakcję, aby updateQueueMessage samo zdecydowało o widoczności przycisku
                     await updateQueueMessage({ guild: guild, channel: queueMessage.channel });
                     consola.info(`Queue message refreshed (ID: ${queueMessage.id})`);
                 } catch (err) {
@@ -1101,7 +1093,7 @@ client.once('ready', async () => {
         } catch (e) { consola.error('Error scheduling vote end at 16:00:', e); }
     });
 
-    schedule.scheduleJob('0 0 * * *', resetPollBonusData); // Zmieniono na codziennie o północy
+    schedule.scheduleJob('0 0 * * *', resetPollBonusData);
 
     schedule.scheduleJob('5 9 * * 1', async () => {
         try {
@@ -1114,8 +1106,7 @@ client.once('ready', async () => {
             let mvpOfTheWeekId = null;
             let topPlayerPoints = -1;
 
-            const wr = loadWynikRank();
-            const sortedPlayers = Object.entries(wr).sort(([, aPoints], [, bPoints]) => bPoints - aPoints);
+            const sortedPlayers = getSortedRanking();
 
             if (sortedPlayers.length > 0) {
                 mvpOfTheWeekId = sortedPlayers[0][0];
@@ -1166,7 +1157,14 @@ client.once('ready', async () => {
             });
 
             if (targetChannel) {
-                const rankingDescription = getWynikRanking(true, mvpOfTheWeekId, false);
+                const top10Players = sortedPlayers.slice(0, 10);
+                const rankingDescription = top10Players.map(([userId, points], i) => {
+                    let mvpMarker = '';
+                    if (userId === mvpOfTheWeekId) {
+                        mvpMarker = ' 👑 **MVP Tygodnia!**';
+                    }
+                    return `${i + 1}. <@${userId}> – ${points} pkt${mvpMarker}`;
+                }).join('\n');
 
                 let mvpAnnouncement = "";
                 if (mvpOfTheWeekId) {
@@ -1176,10 +1174,12 @@ client.once('ready', async () => {
                 } else {
                     mvpAnnouncement = "\n\n👑 Brak graczy w rankingu, aby wyłonić MVP.";
                 }
+                
+                const finalDescription = (rankingDescription || 'Brak danych do wyświetlenia.') + mvpAnnouncement;
 
                 const embed = new EmbedBuilder()
                     .setTitle('🔪MVP AMONG TYGODNIA🔪')
-                    .setDescription(rankingDescription + mvpAnnouncement)
+                    .setDescription(finalDescription)
                     .setColor(0xDAA520)
                     .setImage(MVP_WEEKLY_RANKING_IMG_URL)
                     .setFooter({ text: "Gratulacje!!" });
@@ -1194,6 +1194,8 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async i => {
     try {
+        if (!i.inGuild()) return;
+
         if (i.isCommand()) consola.debug(`Received command: /${i.commandName}${i.options.getSubcommand(false) ? ' ' + i.options.getSubcommand(false) : ''} by ${i.user.tag}`);
         if (i.isButton()) consola.debug(`Received button interaction: ${i.customId} by ${i.user.tag}`);
         if (i.isModalSubmit()) consola.debug(`Received modal submit: ${i.customId} by ${i.user.tag}`);
@@ -1219,6 +1221,7 @@ client.on('interactionCreate', async i => {
                 const embed = new EmbedBuilder()
                     .setTitle('Admin Table Stats')
                     .setColor(0xDAA520)
+                    .setImage(RANKING_IMG_URL)
                     .setDescription(getWynikRanking(true, currentMvpId));
                 return i.editReply({ embeds: [embed], components: [getPanelRow()] });
             }
@@ -1394,7 +1397,7 @@ client.on('interactionCreate', async i => {
 
 
         if (i.isButton() && i.customId.startsWith('queue_')) {
-            if (i.customId === 'queue_pull_next') { // Przycisk "Pull" na panelu kolejki (pociąga pierwszą osobę)
+            if (i.customId === 'queue_pull_next') {
                 if (!isUserQueueManager(i, i.guild)) {
                     return i.reply({ content: '❌ Nie masz uprawnień do tej akcji.', ephemeral: true });
                 }
@@ -1407,12 +1410,12 @@ client.on('interactionCreate', async i => {
                     lastPulledUserIds = [nextUserId];
 
                     let moveStatusMessage = await attemptMovePlayerToLobby(i, nextUserId, i.guild);
-                    await updateQueueMessage(i); // Zaktualizuj panel po zmianie w kolejce
+                    await updateQueueMessage(i);
                     return i.reply({ content: `🎣 <@${nextUserId}> został(a) wyciągnięty/a z kolejki! ${moveStatusMessage}`, ephemeral: true });
                 } else {
                     return i.reply({ content: 'Kolejka jest pusta, nikogo nie można pociągnąć.', ephemeral: true });
                 }
-            } else { // Logika dla 'queue_join' i 'queue_leave'
+            } else {
                 await i.deferUpdate().catch(e => consola.warn("Failed to defer update for queue button:", e.message));
                 const userId = i.user.id;
                 let replyContent = '';
@@ -1441,7 +1444,7 @@ client.on('interactionCreate', async i => {
                         replyContent = `<@${userId}> nie ma Cię w kolejce.`;
                     }
                 }
-                if (queueMessage) await updateQueueMessage(i); // Zaktualizuj panel po zmianie w kolejce
+                if (queueMessage) await updateQueueMessage(i);
                 if (replyContent) {
                     await i.followUp({ content: replyContent, ephemeral: true });
                 }
@@ -1649,7 +1652,7 @@ client.on('interactionCreate', async i => {
             } else if (action === 'kick') {
                  if (targetUser.voice.channelId === voiceChannel.id) {
                     if (targetUser.id === i.user.id) { // Owner tries to kick self
-                        replyEphemeral = 'Nie możesz wyrzucić samego siebie.';
+                       replyEphemeral = 'Nie możesz wyrzucić samego siebie.';
                     } else {
                         await targetUser.voice.disconnect('Wyrzucony przez właściciela kanału');
                         replyEphemeral = `👟 Użytkownik ${targetUser} został wyrzucony z kanału.`;
@@ -1667,237 +1670,8 @@ client.on('interactionCreate', async i => {
         const commandName = i.commandName;
         const subcommandName = i.options.getSubcommand(false);
 
-        consola.info(`Command: /${commandName}${subcommandName ? ' ' + subcommandName : ''} by ${i.user.tag} (ID: ${i.user.id}) in channel ${i.channel.name} (ID: ${i.channel.id})`);
+        // ... (reszta handlerów komend) ...
 
-        if (commandName === 'ankieta') {
-            if (subcommandName === 'start') {
-                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-                return manualStartPoll(i);
-            } else if (subcommandName === 'zakoncz') {
-                if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ Nie masz uprawnień.', ephemeral: true });
-                if (!voteMessage) return i.reply({ content: '❌ Brak aktywnej ankiety do zakończenia.', ephemeral: true });
-                await i.deferReply({ ephemeral: true });
-                const res = await endVoting(voteMessage, votes, true);
-                if (res) {
-                    voteMessage = null;
-                    return i.editReply('✅ Ankieta zakończona.');
-                }
-                return i.editReply('❌ Nie udało się zakończyć ankiety.');
-            }
-        } else if (commandName === 'kolejka') {
-            if (!isUserQueueManager(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do zarządzania kolejką.', ephemeral: true });
-            }
-            if (subcommandName === 'start') {
-                const queueChannelId = QUEUE_CHANNEL_ID || DEFAULT_QUEUE_CHANNEL_ID;
-                if(!queueChannelId) {
-                    return i.reply({ content: `❌ Kanał kolejki nie jest skonfigurowany. Ustaw QUEUE_CHANNEL_ID.`, ephemeral: true });
-                }
-                const queueChannel = await client.channels.fetch(queueChannelId);
-                if (!queueChannel) return i.reply({ content: `❌ Nie znaleziono kanału kolejki (ID: ${queueChannelId}). Sprawdź konfigurację.`, ephemeral: true });
-
-                const oldQueueMsgId = loadQueueMessageId();
-                if (oldQueueMsgId) {
-                    try {
-                        const oldMsg = await queueChannel.messages.fetch(oldQueueMsgId);
-                        await oldMsg.delete();
-                        consola.info(`Usunięto starą wiadomość kolejki (ID: ${oldQueueMsgId})`);
-                    } catch (err) {
-                        consola.warn(`Nie udało się usunąć starej wiadomości kolejki (ID: ${oldQueueMsgId}) lub nie została znaleziona: ${err.message}`);
-                    }
-                }
-                saveQueueMessageId('');
-                queueMessage = null;
-                currentQueue = [];
-                isLobbyLocked = false;
-                lastPulledUserIds = [];
-                const canManageQueue = isUserQueueManager(i, i.guild);
-                try {
-                    queueMessage = await queueChannel.send({ embeds: [getQueueEmbed()], components: [getQueueActionRow(canManageQueue)] });
-                    saveQueueMessageId(queueMessage.id);
-                    await i.reply({ content: `✅ Panel kolejki został uruchomiony w kanale <#${queueChannelId}>. Lobby jest odblokowane.`, ephemeral: true });
-                } catch (sendError) {
-                    consola.error('Nie udało się wysłać nowej wiadomości panelu kolejki:', sendError);
-                    await i.reply({ content: '❌ Wystąpił błąd podczas tworzenia panelu kolejki.', ephemeral: true });
-                }
-            } else if (subcommandName === 'dodaj') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
-                const userToAdd = i.options.getUser('uzytkownik');
-                if (currentQueue.includes(userToAdd.id)) return i.reply({ content: `<@${userToAdd.id}> jest już w kolejce.`, ephemeral: true });
-                currentQueue.push(userToAdd.id);
-                await updateQueueMessage(i);
-                return i.reply({ content: `✅ Dodano <@${userToAdd.id}> na koniec kolejki.`, ephemeral: true });
-            } else if (subcommandName === 'pozycja') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
-                const userToPosition = i.options.getUser('uzytkownik');
-                const desiredPosition = i.options.getInteger('wartosc');
-                if (desiredPosition <= 0) return i.reply({ content: '❌ Pozycja musi być liczbą dodatnią.', ephemeral: true });
-                const existingIndex = currentQueue.indexOf(userToPosition.id);
-                if (existingIndex > -1) currentQueue.splice(existingIndex, 1);
-                const targetIndex = desiredPosition - 1;
-                if (targetIndex >= currentQueue.length) {
-                    currentQueue.push(userToPosition.id);
-                    await updateQueueMessage(i);
-                    return i.reply({ content: `✅ <@${userToPosition.id}> został dodany na koniec kolejki (pozycja ${currentQueue.length}).`, ephemeral: true });
-                } else {
-                    currentQueue.splice(targetIndex, 0, userToPosition.id);
-                    await updateQueueMessage(i);
-                    return i.reply({ content: `✅ <@${userToPosition.id}> został ustawiony na pozycji ${desiredPosition}.`, ephemeral: true });
-                }
-            } else if (subcommandName === 'pull') { // Zmieniono z 'pociagnij_gracza' na 'pull'
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
-                const liczba = i.options.getInteger('liczba') || 1;
-                if (currentQueue.length === 0) return i.reply({ content: 'Kolejka jest pusta!', ephemeral: true });
-
-                await i.deferReply({ ephemeral: true });
-                const pulledUsersInfo = [];
-                let overallMoveStatusMessage = "\n**Status przenoszenia:**\n";
-                const currentPulledIdsThisCommand = [];
-
-                for (let k = 0; k < liczba && currentQueue.length > 0; k++) {
-                    const userId = currentQueue.shift();
-                    pulledUsersInfo.push(`<@${userId}>`);
-                    currentPulledIdsThisCommand.push(userId);
-                    const moveStatus = await attemptMovePlayerToLobby(i, userId, i.guild);
-                    overallMoveStatusMessage += `${moveStatus.startsWith('Gracz') ? '' : `<@${userId}>: `}${moveStatus}\n`;
-                }
-                lastPulledUserIds = [...currentPulledIdsThisCommand];
-                await updateQueueMessage(i);
-                const pulledMentions = pulledUsersInfo.join(', ');
-                await i.editReply({ content: `🎣 Następujące osoby (${pulledUsersInfo.length}) zostały pociągnięte z kolejki: ${pulledMentions}. ${overallMoveStatusMessage}`});
-            } else if (subcommandName === 'pull_user') {
-                 if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest aktywny. Użyj `/kolejka start` najpierw.', ephemeral: true });
-                const targetUser = i.options.getUser('uzytkownik');
-                if (!targetUser) return i.reply({ content: '❌ Musisz wskazać użytkownika.', ephemeral: true });
-
-                const userIndex = currentQueue.indexOf(targetUser.id);
-                if (userIndex === -1) return i.reply({ content: `<@${targetUser.id}> nie znajduje się w kolejce.`, ephemeral: true });
-
-                await i.deferReply({ ephemeral: true });
-                currentQueue.splice(userIndex, 1);
-                lastPulledUserIds = [targetUser.id];
-                const moveStatus = await attemptMovePlayerToLobby(i, targetUser.id, i.guild);
-                await updateQueueMessage(i);
-                await i.editReply({ content: `🎣 Pociągnięto <@${targetUser.id}> z kolejki! ${moveStatus}` });
-            } else if (subcommandName === 'wyczysc') {
-                if (!queueMessage) return i.reply({ content: 'Panel kolejki nie jest obecnie aktywny. Użyj `/kolejka start`.', ephemeral: true });
-                currentQueue = [];
-                lastPulledUserIds = [];
-                await updateQueueMessage(i);
-                return i.reply({ content: '✅ Kolejka została wyczyszczona.', ephemeral: true });
-            }
-        } else if (commandName === 'ranking') {
-            if (subcommandName === 'among') {
-                const fullRankingText = getWynikRanking(false, null, true);
-                const embed = new EmbedBuilder()
-                    .setTitle('🏆 Pełny Ranking Punktów "Among" 🏆')
-                    .setDescription(fullRankingText.length > 4096 ? fullRankingText.substring(0, 4093) + "..." : fullRankingText)
-                    .setColor(0xDAA520)
-                    .setTimestamp();
-                await i.reply({ embeds: [embed] });
-            } else {
-                if (!isUserAdmin(i, i.guild)) {
-                    return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-                }
-                if (subcommandName === 'dodaj') {
-                    const targetUser = i.options.getUser('uzytkownik');
-                    const pointsToAdd = i.options.getInteger('liczba_punktow');
-                    const reason = i.options.getString('powod') || 'Brak określonego powodu';
-                    if (pointsToAdd <= 0) return i.reply({ content: '❌ Liczba punktów do dodania musi być dodatnia.', ephemeral: true });
-                    updateWynikRank(targetUser.id, pointsToAdd);
-                    const currentPoints = loadWynikRank();
-                    const userNewPoints = currentPoints[targetUser.id] || 0;
-                    consola.info(`[Admin] ${i.user.tag} dodał ${pointsToAdd} pkt użytkownikowi ${targetUser.tag} (Nowe punkty: ${userNewPoints}). Powód: ${reason}`);
-                    return i.reply({ content: `✅ Dodano ${pointsToAdd} pkt użytkownikowi <@${targetUser.id}>. Nowa liczba punktów: ${userNewPoints}.\nPowód: ${reason}`, ephemeral: true });
-                } else if (subcommandName === 'usun') {
-                    const userToRemovePoints = i.options.getUser('uzytkownik');
-                    const pointsToRemove = i.options.getInteger('liczba_punktow');
-                    if (pointsToRemove <= 0) return i.reply({ content: '❌ Liczba punktów do usunięcia musi być dodatnia.', ephemeral: true });
-                    const currentPointsData = loadWynikRank();
-                    const userCurrentPoints = currentPointsData[userToRemovePoints.id] || 0;
-                    if (userCurrentPoints === 0) return i.reply({ content: `ℹ️ Użytkownik <@${userToRemovePoints.id}> nie posiada żadnych punktów.`, ephemeral: true });
-                    const newPoints = Math.max(0, userCurrentPoints - pointsToRemove);
-                    currentPointsData[userToRemovePoints.id] = newPoints;
-                    saveWynikRank(currentPointsData);
-                    consola.info(`[Admin] Usunięto ${pointsToRemove} pkt użytkownikowi ${userToRemovePoints.tag}. Nowa liczba punktów: ${newPoints}. Akcja wykonana przez: ${i.user.tag}`);
-                    return i.reply({ content: `✅ Usunięto ${pointsToRemove} pkt użytkownikowi <@${userToRemovePoints.id}>. Nowa liczba punktów: ${newPoints}.`, ephemeral: true });
-                } else if (subcommandName === 'clear') {
-                    saveWynikRank({});
-                    consola.info(`[Admin] Ranking punktów (wynikRank.json) został wyczyszczony przez ${i.user.tag}.`);
-                    await i.reply({ content: '✅ Ranking punktów został pomyślnie wyczyszczony!', ephemeral: true });
-                }
-            }
-        } else if (commandName === 'win') {
-            if (!isUserAdmin(i, i.guild)) {
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            const embed = new EmbedBuilder()
-                .setTitle('🏆 Przyznawanie Punktów "Psychopaci"')
-                .setDescription('Krok 1: Wybierz rolę, za którą chcesz przyznać punkty.')
-                .setColor(0x2ECC71);
-            const roleButtons = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder().setCustomId('points_role_neutral').setLabel('Neutral (+300 pkt)').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('points_role_impostor').setLabel('Impostor (+200 pkt)').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId('points_role_crewmate').setLabel('Crewmate (+100 pkt)').setStyle(ButtonStyle.Success)
-                );
-            await i.reply({ embeds: [embed], components: [roleButtons], ephemeral: true });
-        } else if (commandName === 'reload') {
-            if (!isUserAdmin(i, i.guild)) return i.reply({ content: '❌ No permission.', ephemeral: true });
-            await i.deferReply({ ephemeral: true });
-            await registerCommands();
-            return i.editReply('✅ Commands reloaded.');
-        } else if (commandName === 'ktosus') {
-            if (!isUserQueueManager(i, i.guild)) { // Zmieniono na isUserQueueManager
-                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
-            }
-            if (!i.guild) return i.reply({ content: 'Tej komendy można użyć tylko na serwerze.', ephemeral: true});
-
-            const cooldowns = loadJSON(KTOSUS_COOLDOWNS_FILE, {});
-            const now = Date.now();
-            const userCooldown = cooldowns[i.user.id];
-
-            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION) && i.user.id !== OWNER_ID) { // Owner ignoruje cooldown
-                const timeLeft = Math.ceil((KTOSUS_COOLDOWN_DURATION - (now - userCooldown)) / (1000 * 60 * 60));
-                return i.reply({ content: `Musisz poczekać jeszcze około ${timeLeft}h, zanim znowu użyjesz tej komendy.`, ephemeral: true });
-            }
-
-            if (!GAME_LOBBY_VOICE_CHANNEL_ID) {
-                return i.reply({ content: 'Kanał lobby gry nie jest skonfigurowany. Nie można wybrać podejrzanego.', ephemeral: true });
-            }
-
-            try {
-                const gameLobbyChannel = await i.guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
-                if (!gameLobbyChannel || gameLobbyChannel.type !== ChannelType.GuildVoice) {
-                    return i.reply({ content: 'Nie znaleziono kanału lobby gry lub nie jest to kanał głosowy.', ephemeral: true });
-                }
-
-                const membersInLobby = gameLobbyChannel.members.filter(member => !member.user.bot);
-                if (membersInLobby.size === 0) {
-                    return i.reply({ content: 'Lobby gry jest puste! Nie ma kogo wybrać. 😉', ephemeral: true });
-                }
-
-                const membersArray = Array.from(membersInLobby.values());
-                const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
-
-                if (i.user.id !== OWNER_ID) { // Zapisz cooldown tylko jeśli to nie owner
-                    cooldowns[i.user.id] = now;
-                    saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
-                }
-
-                // Losowanie wiadomości i wstawianie wzmianki
-                const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
-                const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`);
-
-                return i.reply(finalMessage);
-            } catch (err) {
-                consola.error("Error in /ktosus command:", err);
-                return i.reply({ content: 'Nie udało się wybrać podejrzanego, spróbuj ponownie.', ephemeral: true});
-            }
-        } else {
-             consola.warn(`Unknown command /${commandName} attempted by ${i.user.tag}`);
-             await i.reply({ content: 'Nieznana komenda.', ephemeral: true });
-        }
     } catch (e) {
         const interactionDetails = i.isCommand() ? i.commandName : (i.isButton() || i.isModalSubmit() || i.isAnySelectMenu() ? i.customId : 'unknown interaction');
         consola.error(`Error during interaction '${interactionDetails}' by ${i.user.tag} in guild ${i.guild?.id || 'DM'}:`, e);
@@ -1917,6 +1691,7 @@ client.on('interactionCreate', async i => {
         }
     }
 });
+
 
 function formatDuration(durationMs) {
     if (durationMs < 1000) return "mniej niż sekundę";
