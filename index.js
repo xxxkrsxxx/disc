@@ -570,7 +570,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
                 summaryEmbed.addFields({ name: `⏰ Obecni o ${winnerTime}:`, value: 'Nikt nie potwierdził przybycia na tę godzinę.' });
             }
         } else if (winnerTime === 'tie') {
-            summaryTitle = `🤝 Mamy Remis! �`;
+            summaryTitle = `🤝 Mamy Remis! 🤝`;
             gifUrl = TIE_POLL_GIF;
             summaryDescription = 'Nie udało się wybrać jednej godziny. Spróbujcie dogadać się na czacie!';
             summaryEmbed.setDescription(summaryDescription);
@@ -1651,7 +1651,7 @@ client.on('interactionCreate', async i => {
                 replyEphemeral = `🚫 Użytkownik ${targetUser} został zablokowany i wyrzucony z kanału (jeśli był).`;
             } else if (action === 'kick') {
                  if (targetUser.voice.channelId === voiceChannel.id) {
-                    if (targetUser.id === i.user.id) { // Owner tries to kick self
+                    if (targetUser.id === i.user.id) {
                        replyEphemeral = 'Nie możesz wyrzucić samego siebie.';
                     } else {
                         await targetUser.voice.disconnect('Wyrzucony przez właściciela kanału');
@@ -1669,8 +1669,63 @@ client.on('interactionCreate', async i => {
         if (!i.isChatInputCommand()) return;
         const commandName = i.commandName;
         const subcommandName = i.options.getSubcommand(false);
+        
+        if (commandName === 'ranking' && subcommandName === 'among') {
+            // Already handled above
+            return;
+        }
 
-        // ... (reszta handlerów komend) ...
+        if (commandName === 'ktosus') {
+            if (!isUserQueueManager(i, i.guild)) {
+                return i.reply({ content: '❌ Nie masz uprawnień do tej komendy.', ephemeral: true });
+            }
+            
+            const cooldowns = loadJSON(KTOSUS_COOLDOWNS_FILE, {});
+            const now = Date.now();
+            const userCooldown = cooldowns[i.user.id];
+
+            if (userCooldown && (now - userCooldown < KTOSUS_COOLDOWN_DURATION) && i.user.id !== OWNER_ID) {
+                const timeLeftMs = KTOSUS_COOLDOWN_DURATION - (now - userCooldown);
+                const hours = Math.floor(timeLeftMs / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60));
+                return i.reply({ content: `Musisz poczekać jeszcze ${hours}h ${minutes}m, zanim znowu użyjesz tej komendy.`, ephemeral: true });
+            }
+
+            if (!GAME_LOBBY_VOICE_CHANNEL_ID) {
+                return i.reply({ content: 'Kanał lobby gry nie jest skonfigurowany. Nie można wybrać podejrzanego.', ephemeral: true });
+            }
+
+            try {
+                const gameLobbyChannel = await i.guild.channels.fetch(GAME_LOBBY_VOICE_CHANNEL_ID).catch(() => null);
+                if (!gameLobbyChannel || gameLobbyChannel.type !== ChannelType.GuildVoice) {
+                    return i.reply({ content: 'Nie znaleziono kanału lobby gry lub nie jest to kanał głosowy.', ephemeral: true });
+                }
+
+                const membersInLobby = gameLobbyChannel.members.filter(member => !member.user.bot);
+                if (membersInLobby.size === 0) {
+                    return i.reply({ content: 'Lobby gry jest puste! Nie ma kogo wybrać. 😉', ephemeral: true });
+                }
+
+                const membersArray = Array.from(membersInLobby.values());
+                const randomMember = membersArray[Math.floor(Math.random() * membersArray.length)];
+
+                if (i.user.id !== OWNER_ID) {
+                    cooldowns[i.user.id] = now;
+                    saveJSON(KTOSUS_COOLDOWNS_FILE, cooldowns);
+                }
+
+                const randomMessageTemplate = KTOSUS_MESSAGES[Math.floor(Math.random() * KTOSUS_MESSAGES.length)];
+                const finalMessage = randomMessageTemplate.replace(/@nick/g, `<@${randomMember.id}>`);
+
+                return i.reply(finalMessage);
+            } catch (err) {
+                consola.error("Error in /ktosus command:", err);
+                return i.reply({ content: 'Nie udało się wybrać podejrzanego, spróbuj ponownie.', ephemeral: true});
+            }
+        }
+        
+        // Handle other commands
+        // ... (reszta handlerów dla /kolejka, /ankieta, /win etc.)
 
     } catch (e) {
         const interactionDetails = i.isCommand() ? i.commandName : (i.isButton() || i.isModalSubmit() || i.isAnySelectMenu() ? i.customId : 'unknown interaction');
