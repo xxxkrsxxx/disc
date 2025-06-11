@@ -390,7 +390,7 @@ async function registerCommands() {
     cmds.push(
         new SlashCommandBuilder()
             .setName('ktosus')
-            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 8h).') // Zaktualizowany opis
+            .setDescription('Losowo wybiera podejrzaną osobę z lobby gry (admin/mistrz lobby, cooldown 8h).')
             .toJSON()
     );
 
@@ -555,7 +555,7 @@ async function endVoting(message, votesCollection, forceEnd = false) {
         let summaryDescription = '';
 
         if (winnerTime && winnerTime !== 'tie') {
-            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉�🎉`;
+            summaryTitle = `🎉🎉🎉 Godzina ${winnerTime} Wygrywa! 🎉🎉🎉`;
             if (WINNING_POLL_GIFS.length > 0) {
                 gifUrl = WINNING_POLL_GIFS[Math.floor(Math.random() * WINNING_POLL_GIFS.length)];
             } else {
